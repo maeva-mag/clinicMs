@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import './AdminDashboard.css';
-import { FaTachometerAlt, FaUserMd, FaUserInjured, FaFileInvoiceDollar, FaSignOutAlt, FaUser, FaSearch, FaBuilding, FaDownload } from "react-icons/fa";
+import { FaTachometerAlt, FaUserMd, FaUserInjured, FaFileInvoiceDollar, FaSignOutAlt, FaUser, FaSearch, FaBuilding, FaDownload, FaUserPlus, FaUserNurse, FaCalendarAlt, FaEnvelope, FaIdBadge } from "react-icons/fa";
 import logo from '../assets/clinic-logo.jpg';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Bar, Doughnut, Line } from 'react-chartjs-2';
@@ -78,6 +78,9 @@ const AdminDashboard = () => {
   // eslint-disable-next-line no-unused-vars
   const [viewingPatientLoading, setViewingPatientLoading] = useState(false);
 
+  const [viewingStaffData, setViewingStaffData] = useState(null);
+  const [viewingStaffLoading, setViewingStaffLoading] = useState(false);
+
   const handleSearchChange = (val) => {
     setSearchQuery(val);
     if (val.trim().length > 0) {
@@ -110,6 +113,72 @@ const AdminDashboard = () => {
       setError('Failed to load patient dashboard');
     } finally {
       setViewingPatientLoading(false);
+    }
+  };
+
+  const handleViewStaffDashboard = async (staffId, staffType) => {
+    setViewingStaffLoading(true);
+    setError('');
+    try {
+      let profileRes, appointmentsRes, shiftsRes;
+      if (staffType === 'doctor') {
+        [profileRes, appointmentsRes, shiftsRes] = await Promise.all([
+          API.get(`/doctors/doctorProfile/${staffId}`),
+          API.get(`/doctors/doctorAppointments/${staffId}`),
+          API.get('/shifts')
+        ]);
+        const doctor = profileRes.data.doctor;
+        const allShifts = shiftsRes.data.shifts || [];
+        const personalShifts = allShifts.filter(s => s.staffType === 'doctor' && (s.doctor?._id === staffId || s.doctor === staffId));
+        setViewingStaffData({
+          type: 'doctor',
+          profile: {
+            name: doctor.account?.name || doctor.name,
+            email: doctor.account?.email || doctor.email,
+            role: doctor.account?.role || doctor.role || 'doctor',
+            department: doctor.department || 'N/A',
+            specialisation: doctor.specialisation || 'N/A',
+            gender: doctor.gender || 'N/A',
+            telephone: doctor.telephone || 'N/A',
+            address: doctor.address || 'N/A',
+            profilepicture: doctor.profilepicture || null,
+            active: doctor.active,
+            createdAt: doctor.createdAt,
+          },
+          appointments: appointmentsRes.data.appointments || [],
+          shifts: personalShifts,
+        });
+      } else {
+        [profileRes, shiftsRes] = await Promise.all([
+          API.get(`/nurses/nurseProfile/${staffId}`),
+          API.get('/shifts')
+        ]);
+        const nurse = profileRes.data.nurse;
+        const allShifts = shiftsRes.data.shifts || [];
+        const personalShifts = allShifts.filter(s => s.staffType === 'nurse' && (s.nurse?._id === staffId || s.nurse === staffId));
+        setViewingStaffData({
+          type: 'nurse',
+          profile: {
+            name: nurse.name,
+            email: nurse.email,
+            role: nurse.role || 'nurse',
+            ward: nurse.ward || 'N/A',
+            gender: nurse.gender || 'N/A',
+            telephone: nurse.telephone || 'N/A',
+            address: nurse.address || 'N/A',
+            profilepicture: nurse.profilepicture || null,
+            active: nurse.active,
+            createdAt: nurse.createdAt,
+          },
+          appointments: [],
+          shifts: personalShifts,
+        });
+      }
+    } catch (err) {
+      console.error('Error loading staff dashboard:', err);
+      setError('Failed to load staff dashboard');
+    } finally {
+      setViewingStaffLoading(false);
     }
   };
 
@@ -869,52 +938,7 @@ const AdminDashboard = () => {
               <span className="user-info">Welcome {profile?.name || adminName || 'Admin'}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div className="search-container" style={{ position: 'relative' }}>
-              <div 
-                onClick={() => setShowSearch(!showSearch)} 
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#1798ee', border: '1px solid #d7e2f4' }}
-              >
-                <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
-              </div>
-              
-              {showSearch && (
-                <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                  <input 
-                    type="text" 
-                    placeholder="Type name..." 
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
-                    autoFocus
-                  />
-                  {suggestions.length > 0 && (
-                    <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
-                      {suggestions.map(p => (
-                        <div 
-                          key={p._id} 
-                          onClick={() => {
-                            handleViewPatientDashboard(p._id);
-                            setShowSearch(false);
-                            setSearchQuery('');
-                            setSuggestions([]);
-                          }}
-                          style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                        >
-                          {p.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {searchQuery.trim().length > 0 && suggestions.length === 0 && (
-                    <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+
         </header>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -1206,233 +1230,379 @@ const AdminDashboard = () => {
 
           {!showProfileTab && activeTab === 'staff' && (
             <div className="staff-section">
-              <div className="staff-actions">
-                <button className={staffView === 'form' ? 'active' : ''} onClick={() => setStaffView('form')}>Create Staff Account</button>
-                <button className={staffView === 'nurses' ? 'active' : ''} onClick={() => setStaffView('nurses')}>Nurses ({staffData.nurses.length})</button>
-                <button className={staffView === 'doctors' ? 'active' : ''} onClick={() => setStaffView('doctors')}>Doctors ({staffData.doctors.length})</button>
-                <button className={staffView === 'shifts' ? 'active' : ''} onClick={() => setStaffView('shifts')}>Weekly Shift Timetable</button>
+
+              {/* ── Staff Tab Navigation ── */}
+              <div className="staff-nav-tabs">
+                <button
+                  className={`staff-nav-btn${staffView === 'form' ? ' snb-active' : ''}`}
+                  onClick={() => setStaffView('form')}
+                >
+                  <FaUserPlus className="snb-icon" /> Create Staff
+                </button>
+                <button
+                  className={`staff-nav-btn${staffView === 'nurses' ? ' snb-active' : ''}`}
+                  onClick={() => setStaffView('nurses')}
+                >
+                  <FaUserNurse className="snb-icon" /> Nurses
+                  <span className="snb-badge">{staffData.nurses.length}</span>
+                </button>
+                <button
+                  className={`staff-nav-btn${staffView === 'doctors' ? ' snb-active' : ''}`}
+                  onClick={() => setStaffView('doctors')}
+                >
+                  <FaUserMd className="snb-icon" /> Doctors
+                  <span className="snb-badge">{staffData.doctors.length}</span>
+                </button>
+                <button
+                  className={`staff-nav-btn${staffView === 'shifts' ? ' snb-active' : ''}`}
+                  onClick={() => setStaffView('shifts')}
+                >
+                  <FaCalendarAlt className="snb-icon" /> Shift Timetable
+                </button>
               </div>
 
+              {/* ── Create Staff Form ── */}
               {staffView === 'form' && (
-                <div className="staff-form-container">
-                  <h2>Create New Staff Account</h2>
-                  <form onSubmit={handleCreateStaff}>
-                    <input type="text" name="name" value={staffForm.name} onChange={handleStaffChange} placeholder="Full Name" required />
-                    <input type="email" name="email" value={staffForm.email} onChange={handleStaffChange} placeholder="Email" required />
-                    <select name="role" value={staffForm.role} onChange={handleStaffChange}>
-                      <option value="doctor">Doctor</option>
-                      <option value="nurse">Nurse</option>
-                    </select>
-                    <button type="submit" disabled={loading}>{loading ? 'Creating...' : 'Create Account'}</button>
-                  </form>
-                </div>
-              )}
-
-              {staffView === 'nurses' && (
-                <div className="staff-list">
-                  <h2>Nurses List</h2>
-                  {staffData.nurses.length > 0 ? (
-                    <table>
-                      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Ward</th><th>Created At</th></tr></thead>
-                      <tbody>
-                        {staffData.nurses.map((n, idx) => (
-                          <tr key={idx}>
-                            <td>{n.name}</td>
-                            <td>{n.email || 'N/A'}</td>
-                            <td>{n.role}</td>
-                            <td>{n.ward || 'N/A'}</td>
-                            <td>{n.createdAt ? (new Date(n.createdAt).toLocaleDateString() + ' ' + new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : <p>No nurses found</p>}
-                  {staffData.nurses.length > 0 && (
-                    <div style={{ marginTop: '15px' }}>
-                      <button 
-                        onClick={downloadNursesOnlyPDF}
-                        style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 18px', background: '#2f6dff', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', transition: 'background-color 0.2s' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#1e52d4'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = '#2f6dff'}
-                      >
-                        <FaDownload style={{ marginRight: '8px' }} /> Save Nurses List as PDF
-                      </button>
+                <div className="create-staff-card">
+                  <div className="csc-header">
+                    <div className="csc-header-icon"><FaUserPlus /></div>
+                    <div>
+                      <h2 className="csc-title">Create New Staff Account</h2>
+                      <p className="csc-subtitle">Add a doctor or nurse to the system. They will receive a setup email.</p>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {staffView === 'doctors' && (
-                <div className="staff-list">
-                  <h2>Doctors List</h2>
-                  {staffData.doctors.length > 0 ? (
-                    <table>
-                      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Created At</th></tr></thead>
-                      <tbody>
-                        {staffData.doctors.map((d, idx) => (
-                          <tr key={idx}>
-                            <td>{d.account?.name || d.name || 'Unknown'}</td>
-                            <td>{d.account?.email || d.email || 'N/A'}</td>
-                            <td>{d.account?.role || d.role || 'doctor'}</td>
-                            <td>{d.department || 'N/A'}</td>
-                            <td>{d.createdAt ? (new Date(d.createdAt).toLocaleDateString() + ' ' + new Date(d.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : <p>No doctors found</p>}
-                  {staffData.doctors.length > 0 && (
-                    <div style={{ marginTop: '15px' }}>
-                      <button 
-                        onClick={downloadDoctorsOnlyPDF}
-                        style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 18px', background: '#2f6dff', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', transition: 'background-color 0.2s' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#1e52d4'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = '#2f6dff'}
-                      >
-                        <FaDownload style={{ marginRight: '8px' }} /> Save Doctors List as PDF
-                      </button>
+                  </div>
+                  <form onSubmit={handleCreateStaff} className="csc-form">
+                    <div className="csc-field">
+                      <label className="csc-label">Full Name</label>
+                      <div className="csc-input-wrap">
+                        <FaUser className="csc-input-icon" />
+                        <input
+                          type="text"
+                          name="name"
+                          value={staffForm.name}
+                          onChange={handleStaffChange}
+                          placeholder="e.g. Dr. Sarah Johnson"
+                          required
+                          className="csc-input"
+                        />
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {staffView === 'shifts' && (
-                <div className="shift-management-container" style={{ width: '100%' }}>
-                  <div className="staff-form-container" style={{ maxWidth: '100%', marginBottom: '30px' }}>
-                    <h2>Schedule a Shift</h2>
-                    <form onSubmit={handleCreateShift} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Staff Type</label>
-                        <select 
-                          value={shiftForm.staffType} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, staffType: e.target.value, staffId: '' })}
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    <div className="csc-field">
+                      <label className="csc-label">Email Address</label>
+                      <div className="csc-input-wrap">
+                        <FaEnvelope className="csc-input-icon" />
+                        <input
+                          type="email"
+                          name="email"
+                          value={staffForm.email}
+                          onChange={handleStaffChange}
+                          placeholder="e.g. sarah.johnson@hospital.com"
+                          required
+                          className="csc-input"
+                        />
+                      </div>
+                    </div>
+                    <div className="csc-field">
+                      <label className="csc-label">Role</label>
+                      <div className="csc-input-wrap">
+                        <FaIdBadge className="csc-input-icon" />
+                        <select
+                          name="role"
+                          value={staffForm.role}
+                          onChange={handleStaffChange}
+                          className="csc-input"
                         >
                           <option value="doctor">Doctor</option>
                           <option value="nurse">Nurse</option>
                         </select>
                       </div>
+                    </div>
+                    <button type="submit" disabled={loading} className="csc-submit-btn">
+                      {loading ? (
+                        <><span className="csc-spinner"></span> Creating...</>
+                      ) : (
+                        <><FaUserPlus style={{ marginRight: '8px' }} /> Create Account</>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
 
+              {/* ── Nurses List ── */}
+              {staffView === 'nurses' && (
+                <div className="staff-list-card">
+                  <div className="slc-header nurse-header">
+                    <div className="slc-header-left">
+                      <div className="slc-icon-wrap nurse-icon"><FaUserNurse /></div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Staff Member</label>
-                        <select 
-                          value={shiftForm.staffId} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, staffId: e.target.value })}
-                          required
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        >
-                          <option value="">Select Staff Member</option>
-                          {getStaffOptions().map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
+                        <h2 className="slc-title">Nursing Staff</h2>
+                        <p className="slc-subtitle">{staffData.nurses.length} nurse{staffData.nurses.length !== 1 ? 's' : ''} registered</p>
+                      </div>
+                    </div>
+                    {staffData.nurses.length > 0 && (
+                      <button className="slc-pdf-btn" onClick={downloadNursesOnlyPDF}>
+                        <FaDownload style={{ marginRight: '6px' }} /> Export PDF
+                      </button>
+                    )}
+                  </div>
+                  {staffData.nurses.length > 0 ? (
+                    <div className="slc-table-wrap">
+                      <table className="slc-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th><th>Email</th><th>Role</th><th>Ward</th><th>Created At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {staffData.nurses.map((n, idx) => (
+                            <tr key={idx} className="slc-row">
+                              <td>
+                                <div className="slc-name-cell">
+                                  <div className="slc-avatar nurse-av">{(n.name || 'N')[0].toUpperCase()}</div>
+                                  <span
+                                    onClick={() => handleViewStaffDashboard(n._id, 'nurse')}
+                                    style={{ color: '#0f766e', cursor: 'pointer', fontWeight: '600', textDecoration: 'underline' }}
+                                    title="Click to view nurse dashboard"
+                                  >{n.name}</span>
+                                </div>
+                              </td>
+                              <td className="slc-email">{n.email || 'N/A'}</td>
+                              <td><span className="slc-role-badge nurse-badge">{n.role}</span></td>
+                              <td>{n.ward || 'N/A'}</td>
+                              <td className="slc-date">{n.createdAt ? (new Date(n.createdAt).toLocaleDateString() + ' ' + new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'N/A'}</td>
+                            </tr>
                           ))}
-                        </select>
-                      </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="slc-empty">
+                      <FaUserNurse className="slc-empty-icon" />
+                      <p>No nurses found</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
+              {/* ── Doctors List ── */}
+              {staffView === 'doctors' && (
+                <div className="staff-list-card">
+                  <div className="slc-header doctor-header">
+                    <div className="slc-header-left">
+                      <div className="slc-icon-wrap doctor-icon"><FaUserMd /></div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Day of Week</label>
-                        <select 
-                          value={shiftForm.day} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, day: e.target.value })}
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        >
-                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
-                            <option key={d} value={d}>{d}</option>
+                        <h2 className="slc-title">Medical Doctors</h2>
+                        <p className="slc-subtitle">{staffData.doctors.length} doctor{staffData.doctors.length !== 1 ? 's' : ''} registered</p>
+                      </div>
+                    </div>
+                    {staffData.doctors.length > 0 && (
+                      <button className="slc-pdf-btn" onClick={downloadDoctorsOnlyPDF}>
+                        <FaDownload style={{ marginRight: '6px' }} /> Export PDF
+                      </button>
+                    )}
+                  </div>
+                  {staffData.doctors.length > 0 ? (
+                    <div className="slc-table-wrap">
+                      <table className="slc-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Created At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {staffData.doctors.map((d, idx) => (
+                            <tr key={idx} className="slc-row">
+                              <td>
+                                <div className="slc-name-cell">
+                                  <div className="slc-avatar doctor-av">{((d.account?.name || d.name || 'D')[0]).toUpperCase()}</div>
+                                  <span
+                                    onClick={() => handleViewStaffDashboard(d._id, 'doctor')}
+                                    style={{ color: '#1e40af', cursor: 'pointer', fontWeight: '600', textDecoration: 'underline' }}
+                                    title="Click to view doctor dashboard"
+                                  >{d.account?.name || d.name || 'Unknown'}</span>
+                                </div>
+                              </td>
+                              <td className="slc-email">{d.account?.email || d.email || 'N/A'}</td>
+                              <td><span className="slc-role-badge doctor-badge">{d.account?.role || d.role || 'doctor'}</span></td>
+                              <td>{d.department || 'N/A'}</td>
+                              <td className="slc-date">{d.createdAt ? (new Date(d.createdAt).toLocaleDateString() + ' ' + new Date(d.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'N/A'}</td>
+                            </tr>
                           ))}
-                        </select>
-                      </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="slc-empty">
+                      <FaUserMd className="slc-empty-icon" />
+                      <p>No doctors found</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
+              {/* ── Schedule a Shift ── */}
+              {staffView === 'shifts' && (
+                <div className="shift-management-container">
+
+                  {/* Schedule Form */}
+                  <div className="shift-form-card">
+                    <div className="sfc-header">
+                      <div className="sfc-header-icon"><FaCalendarAlt /></div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Shift Type</label>
-                        <select 
-                          value={shiftForm.shiftType} 
-                          onChange={(e) => handleShiftTypeChange(e.target.value)}
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        >
-                          <option value="Morning">Morning (08:00 - 16:00)</option>
-                          <option value="Afternoon">Afternoon (16:00 - 00:00)</option>
-                          <option value="Night">Night (00:00 - 08:00)</option>
-                        </select>
+                        <h2 className="sfc-title">Schedule a Shift</h2>
+                        <p className="sfc-subtitle">Assign a weekly shift slot to a staff member</p>
                       </div>
+                    </div>
+                    <form onSubmit={handleCreateShift} className="sfc-form">
+                      <div className="sfc-grid">
 
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Start Time</label>
-                        <input 
-                          type="text" 
-                          value={shiftForm.startTime} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, startTime: e.target.value })}
-                          required
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        />
+                        <div className="sfc-field">
+                          <label className="sfc-label">Staff Type</label>
+                          <select
+                            className="sfc-select"
+                            value={shiftForm.staffType}
+                            onChange={(e) => setShiftForm({ ...shiftForm, staffType: e.target.value, staffId: '' })}
+                          >
+                            <option value="doctor">Doctor</option>
+                            <option value="nurse">Nurse</option>
+                          </select>
+                        </div>
+
+                        <div className="sfc-field">
+                          <label className="sfc-label">Staff Member</label>
+                          <select
+                            className="sfc-select"
+                            value={shiftForm.staffId}
+                            onChange={(e) => setShiftForm({ ...shiftForm, staffId: e.target.value })}
+                            required
+                          >
+                            <option value="">— Select Staff Member —</option>
+                            {getStaffOptions().map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="sfc-field">
+                          <label className="sfc-label">Day of Week</label>
+                          <select
+                            className="sfc-select"
+                            value={shiftForm.day}
+                            onChange={(e) => setShiftForm({ ...shiftForm, day: e.target.value })}
+                          >
+                            {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="sfc-field">
+                          <label className="sfc-label">Shift Type</label>
+                          <select
+                            className="sfc-select"
+                            value={shiftForm.shiftType}
+                            onChange={(e) => handleShiftTypeChange(e.target.value)}
+                          >
+                            <option value="Morning">🌅 Morning (08:00 – 16:00)</option>
+                            <option value="Afternoon">🌇 Afternoon (16:00 – 00:00)</option>
+                            <option value="Night">🌙 Night (00:00 – 08:00)</option>
+                          </select>
+                        </div>
+
+                        <div className="sfc-field">
+                          <label className="sfc-label">Start Time</label>
+                          <input
+                            type="text"
+                            className="sfc-input"
+                            placeholder="e.g. 08:00"
+                            value={shiftForm.startTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                            required
+                          />
+                        </div>
+
+                        <div className="sfc-field">
+                          <label className="sfc-label">End Time</label>
+                          <input
+                            type="text"
+                            className="sfc-input"
+                            placeholder="e.g. 16:00"
+                            value={shiftForm.endTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                            required
+                          />
+                        </div>
+
+                        <div className="sfc-field sfc-field-full">
+                          <label className="sfc-label">Notes <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span></label>
+                          <input
+                            type="text"
+                            className="sfc-input"
+                            placeholder="e.g. Room 101 duty, on-call coverage..."
+                            value={shiftForm.notes}
+                            onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
+                          />
+                        </div>
+
                       </div>
-
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>End Time</label>
-                        <input 
-                          type="text" 
-                          value={shiftForm.endTime} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })}
-                          required
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        />
-                      </div>
-
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Notes</label>
-                        <input 
-                          type="text" 
-                          placeholder="E.g. Room 101 duty, on-call notes" 
-                          value={shiftForm.notes} 
-                          onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
-                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                        />
-                      </div>
-
-                      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button type="submit" className="submit-btn" style={{ padding: '12px 24px', fontWeight: 'bold' }}>Schedule Shift</button>
+                      <div className="sfc-actions">
+                        <button type="submit" className="sfc-submit-btn">
+                          <FaCalendarAlt style={{ marginRight: '8px' }} /> Schedule Shift
+                        </button>
                       </div>
                     </form>
                   </div>
 
-                  <div className="timetable-container" style={{ marginTop: '20px' }}>
-                    <h3 style={{ color: '#2c3e50', fontSize: '20px', marginBottom: '15px' }}>General Weekly Shift Timetable</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginTop: '15px' }}>
-                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => {
+                  {/* Weekly Timetable */}
+                  <div className="weekly-timetable">
+                    <h3 className="wt-title">General Weekly Shift Timetable</h3>
+                    <div className="wt-grid">
+                      {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day) => {
                         const dayShifts = shifts.filter(s => s.day === day);
+                        const isWeekend = day === 'Saturday' || day === 'Sunday';
                         return (
-                          <div key={day} style={{ background: '#fff', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', border: '1px solid #eef2f5' }}>
-                            <h4 style={{ borderBottom: '2px solid #1abc9c', paddingBottom: '8px', color: '#1e3d7a', margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>{day}</h4>
+                          <div key={day} className={`wt-day-card${isWeekend ? ' wt-weekend' : ''}`}>
+                            <div className="wt-day-header">
+                              <span className="wt-day-name">{day}</span>
+                              <span className="wt-day-count">{dayShifts.length} shift{dayShifts.length !== 1 ? 's' : ''}</span>
+                            </div>
                             {dayShifts.length > 0 ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              <div className="wt-shifts">
                                 {dayShifts.map((s) => {
                                   const staffName = s.staffType === 'doctor' ? (s.doctor?.name || 'Doctor') : (s.nurse?.name || 'Nurse');
                                   const deptOrWard = s.staffType === 'doctor' ? (s.doctor?.department || 'N/A') : (s.nurse?.ward || 'N/A');
+                                  const shiftColor = s.shiftType === 'Morning' ? 'wt-shift-morning' : s.shiftType === 'Afternoon' ? 'wt-shift-afternoon' : 'wt-shift-night';
                                   return (
-                                    <div key={s._id} style={{ border: '1px solid #eef2f5', padding: '10px', borderRadius: '6px', position: 'relative', fontSize: '13px', backgroundColor: '#f8fafc' }}>
-                                      <strong style={{ display: 'block', color: '#1e293b' }}>{staffName}</strong>
-                                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>Role: {s.staffType === 'doctor' ? 'Doctor' : 'Nurse'}</span>
-                                      <div style={{ color: '#475569', marginTop: '6px', fontSize: '12px' }}>
-                                        <div>🕒 {s.startTime} - {s.endTime} ({s.shiftType})</div>
-                                        <div>📍 {deptOrWard}</div>
-                                        {s.notes && <div style={{ fontStyle: 'italic', fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>📝 {s.notes}</div>}
+                                    <div key={s._id} className={`wt-shift-item ${shiftColor}`}>
+                                      <div className="wt-shift-top">
+                                        <strong className="wt-shift-name">{staffName}</strong>
+                                        <button onClick={() => handleDeleteShift(s._id)} className="wt-delete-btn" title="Delete shift">✕</button>
                                       </div>
-                                      <button 
-                                        onClick={() => handleDeleteShift(s._id)} 
-                                        style={{ position: 'absolute', top: '8px', right: '8px', background: '#fecaca', color: '#ef4444', border: 'none', borderRadius: '4px', padding: '4px 6px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}
-                                      >
-                                        ✕ Delete
-                                      </button>
+                                      <span className="wt-shift-role">{s.staffType === 'doctor' ? '👨‍⚕️ Doctor' : '👩‍⚕️ Nurse'}</span>
+                                      <div className="wt-shift-details">
+                                        <span>🕒 {s.startTime} – {s.endTime}</span>
+                                        <span className="wt-shift-type-badge">{s.shiftType}</span>
+                                      </div>
+                                      <div className="wt-shift-location">📍 {deptOrWard}</div>
+                                      {s.notes && <div className="wt-shift-notes">📝 {s.notes}</div>}
                                     </div>
                                   );
                                 })}
                               </div>
-                            ) : <p style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: '13px', margin: 0 }}>No shifts assigned</p>}
+                            ) : (
+                              <div className="wt-empty">
+                                <span>No shifts</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   </div>
+
                 </div>
               )}
+
             </div>
           )}
 
@@ -1609,7 +1779,53 @@ const AdminDashboard = () => {
 
           {!showProfileTab && activeTab === 'patients' && (
             <div className="data-table-container">
-              <h2>All Patients</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+                <h2 style={{ margin: 0 }}>All Patients</h2>
+                <div className="search-container" style={{ position: 'relative' }}>
+                  <div 
+                    onClick={() => setShowSearch(!showSearch)} 
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#1798ee', border: '1px solid #d7e2f4' }}
+                  >
+                    <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
+                  </div>
+                  
+                  {showSearch && (
+                    <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                      <input 
+                        type="text" 
+                        placeholder="Type name..." 
+                        value={searchQuery}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
+                        autoFocus
+                      />
+                      {suggestions.length > 0 && (
+                        <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
+                          {suggestions.map(p => (
+                            <div 
+                              key={p._id} 
+                              onClick={() => {
+                                handleViewPatientDashboard(p._id);
+                                setShowSearch(false);
+                                setSearchQuery('');
+                                setSuggestions([]);
+                              }}
+                              style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
+                              onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                            >
+                              {p.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {searchQuery.trim().length > 0 && suggestions.length === 0 && (
+                        <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="patient-totals">
                 <div className="total-card">
                   <h3>Total Registered Patients</h3>
@@ -2049,6 +2265,157 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* ── Staff Dashboard Modal ── */}
+        {viewingStaffData && (
+          <div className="sdm-overlay" onClick={() => setViewingStaffData(null)}>
+            <div className="sdm-modal" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className={`sdm-header ${viewingStaffData.type === 'nurse' ? 'sdm-nurse' : 'sdm-doctor'}`}>
+                <div className="sdm-avatar">
+                  {viewingStaffData.profile.profilepicture ? (
+                    <img src={viewingStaffData.profile.profilepicture} alt="Profile" className="sdm-avatar-img" />
+                  ) : (
+                    <span className="sdm-avatar-initials">
+                      {(viewingStaffData.profile.name || '?')[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="sdm-header-info">
+                  <h2 className="sdm-name">{viewingStaffData.profile.name}</h2>
+                  <div className="sdm-meta">
+                    <span className="sdm-role-badge">
+                      {viewingStaffData.type === 'doctor' ? '👨‍⚕️ Doctor' : '👩‍⚕️ Nurse'}
+                    </span>
+                    <span className={`sdm-status ${viewingStaffData.profile.active ? 'sdm-active' : 'sdm-inactive'}`}>
+                      {viewingStaffData.profile.active ? '● Active' : '● Inactive'}
+                    </span>
+                  </div>
+                </div>
+                <button className="sdm-close-btn" onClick={() => setViewingStaffData(null)}>✕</button>
+              </div>
+
+              {viewingStaffLoading ? (
+                <div className="sdm-loading">Loading...</div>
+              ) : (
+                <div className="sdm-body">
+
+                  {/* Profile Info */}
+                  <div className="sdm-section">
+                    <h3 className="sdm-section-title">Profile Information</h3>
+                    <div className="sdm-info-grid">
+                      <div className="sdm-info-item">
+                        <span className="sdm-info-label">Email</span>
+                        <span className="sdm-info-value">{viewingStaffData.profile.email || 'N/A'}</span>
+                      </div>
+                      <div className="sdm-info-item">
+                        <span className="sdm-info-label">Gender</span>
+                        <span className="sdm-info-value">{viewingStaffData.profile.gender}</span>
+                      </div>
+                      <div className="sdm-info-item">
+                        <span className="sdm-info-label">Telephone</span>
+                        <span className="sdm-info-value">{viewingStaffData.profile.telephone}</span>
+                      </div>
+                      <div className="sdm-info-item">
+                        <span className="sdm-info-label">Address</span>
+                        <span className="sdm-info-value">{viewingStaffData.profile.address}</span>
+                      </div>
+                      {viewingStaffData.type === 'doctor' && (
+                        <>
+                          <div className="sdm-info-item">
+                            <span className="sdm-info-label">Department</span>
+                            <span className="sdm-info-value">{viewingStaffData.profile.department}</span>
+                          </div>
+                          <div className="sdm-info-item">
+                            <span className="sdm-info-label">Specialisation</span>
+                            <span className="sdm-info-value">{viewingStaffData.profile.specialisation}</span>
+                          </div>
+                        </>
+                      )}
+                      {viewingStaffData.type === 'nurse' && (
+                        <div className="sdm-info-item">
+                          <span className="sdm-info-label">Ward</span>
+                          <span className="sdm-info-value">{viewingStaffData.profile.ward}</span>
+                        </div>
+                      )}
+                      <div className="sdm-info-item">
+                        <span className="sdm-info-label">Member Since</span>
+                        <span className="sdm-info-value">
+                          {viewingStaffData.profile.createdAt ? new Date(viewingStaffData.profile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Shifts */}
+                  <div className="sdm-section">
+                    <h3 className="sdm-section-title">Assigned Shifts ({viewingStaffData.shifts.length})</h3>
+                    {viewingStaffData.shifts.length > 0 ? (
+                      <div className="sdm-shifts-grid">
+                        {viewingStaffData.shifts.map((s, idx) => {
+                          const shiftClass = s.shiftType === 'Morning' ? 'sdm-shift-morning' : s.shiftType === 'Afternoon' ? 'sdm-shift-afternoon' : 'sdm-shift-night';
+                          return (
+                            <div key={idx} className={`sdm-shift-item ${shiftClass}`}>
+                              <div className="sdm-shift-day">{s.day}</div>
+                              <div className="sdm-shift-time">🕒 {s.startTime} – {s.endTime}</div>
+                              <span className="sdm-shift-type">{s.shiftType}</span>
+                              {s.notes && <div className="sdm-shift-notes">📝 {s.notes}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="sdm-empty">No shifts assigned yet.</p>
+                    )}
+                  </div>
+
+                  {/* Appointments (doctors only) */}
+                  {viewingStaffData.type === 'doctor' && (
+                    <div className="sdm-section">
+                      <h3 className="sdm-section-title">Appointments ({viewingStaffData.appointments.length})</h3>
+                      {viewingStaffData.appointments.length > 0 ? (
+                        <div className="sdm-table-wrap">
+                          <table className="sdm-table">
+                            <thead>
+                              <tr>
+                                <th>Patient</th>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {viewingStaffData.appointments.slice(0, 10).map((apt, idx) => (
+                                <tr key={idx}>
+                                  <td>{apt.patient?.name || 'N/A'}</td>
+                                  <td>{apt.date ? new Date(apt.date).toLocaleDateString() : 'N/A'}</td>
+                                  <td>{apt.type || 'N/A'}</td>
+                                  <td>
+                                    <span className={`sdm-apt-badge ${apt.status === 'completed' ? 'sdm-apt-done' : apt.status === 'cancelled' ? 'sdm-apt-cancelled' : 'sdm-apt-pending'}`}>
+                                      {apt.status || 'Pending'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {viewingStaffData.appointments.length > 10 && (
+                            <p className="sdm-more">+ {viewingStaffData.appointments.length - 10} more appointments</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="sdm-empty">No appointments recorded.</p>
+                      )}
+                    </div>
+                  )}
+
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

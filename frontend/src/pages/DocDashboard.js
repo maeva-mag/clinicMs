@@ -437,7 +437,53 @@ const DocDashboard = () => {
 
   const renderPatients = () => (
     <div className="table-card">
-      <h2>Assigned Patients List</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <h2 style={{ margin: 0 }}>Assigned Patients List</h2>
+        <div className="search-container" style={{ position: 'relative' }}>
+          <div 
+            onClick={() => setShowSearch(!showSearch)} 
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#3498db', border: '1px solid #d7e2f4' }}
+          >
+            <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
+          </div>
+          
+          {showSearch && (
+            <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+              <input 
+                type="text" 
+                placeholder="Type name..." 
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', color: '#000' }}
+                autoFocus
+              />
+              {suggestions.length > 0 && (
+                <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
+                  {suggestions.map(p => (
+                    <div 
+                      key={p._id} 
+                      onClick={(e) => {
+                        handlePatientClick(p._id, p.name, e);
+                        setShowSearch(false);
+                        setSearchQuery('');
+                        setSuggestions([]);
+                      }}
+                      style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                    >
+                      {p.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchQuery.trim().length > 0 && suggestions.length === 0 && (
+                <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
       {patients.length === 0 ? (
         <p className="no-data">No patients assigned yet.</p>
       ) : (
@@ -480,7 +526,53 @@ const DocDashboard = () => {
 
   const renderAllPatients = () => (
     <div className="table-card">
-      <h2>All Patients List</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <h2 style={{ margin: 0 }}>All Patients List</h2>
+        <div className="search-container" style={{ position: 'relative' }}>
+          <div 
+            onClick={() => setShowSearch(!showSearch)} 
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#3498db', border: '1px solid #d7e2f4' }}
+          >
+            <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
+          </div>
+          
+          {showSearch && (
+            <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+              <input 
+                type="text" 
+                placeholder="Type name..." 
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', color: '#000' }}
+                autoFocus
+              />
+              {suggestions.length > 0 && (
+                <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
+                  {suggestions.map(p => (
+                    <div 
+                      key={p._id} 
+                      onClick={(e) => {
+                        handlePatientClick(p._id, p.name, e);
+                        setShowSearch(false);
+                        setSearchQuery('');
+                        setSuggestions([]);
+                      }}
+                      style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                    >
+                      {p.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchQuery.trim().length > 0 && suggestions.length === 0 && (
+                <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
       {allPatients.length === 0 ? (
         <p className="no-data">No patients found.</p>
       ) : (
@@ -582,50 +674,6 @@ const DocDashboard = () => {
           </div>
         </div>
         <div className="header-actions">
-          <div className="search-container" style={{ position: 'relative', marginRight: '10px' }}>
-            <div 
-              onClick={() => setShowSearch(!showSearch)} 
-              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#3498db', border: '1px solid #d7e2f4' }}
-            >
-              <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
-            </div>
-            
-            {showSearch && (
-              <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                <input 
-                  type="text" 
-                  placeholder="Type name..." 
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', color: '#000' }}
-                  autoFocus
-                />
-                {suggestions.length > 0 && (
-                  <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
-                    {suggestions.map(p => (
-                      <div 
-                        key={p._id} 
-                        onClick={(e) => {
-                          handlePatientClick(p._id, p.name, e);
-                          setShowSearch(false);
-                          setSearchQuery('');
-                          setSuggestions([]);
-                        }}
-                        style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                      >
-                        {p.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {searchQuery.trim().length > 0 && suggestions.length === 0 && (
-                  <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
-                )}
-              </div>
-            )}
-          </div>
           <button type="button" className="refresh-btn" onClick={fetchDashboard}>
             <FaSyncAlt /> Refresh
           </button>
