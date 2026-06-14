@@ -349,6 +349,7 @@ export const getBillingRecords = async (req, res) => {
     // Fetch billing records
     let records = await Billing.find(filter)
       .populate('patient', 'name email role')
+      .populate('createdBy', 'name')
       .populate({
         path: 'charges',
         select: 'description amount unit date'
@@ -479,5 +480,182 @@ export const getDoctorsAndNurses = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching staff list", error: error.message });
+  }
+};
+
+// ── Epidemiology statistics (admin only) ────────────────────────────────────
+export const getEpidemiologyStats = async (req, res) => {
+  try {
+    const Epidemiology = (await import('../model/epidemiology.js')).default;
+
+    // Optional query params: ?month=6&year=2026
+    // If not supplied, returns ALL months aggregated (for trend chart)
+    const { month, year } = req.query;
+    const matchStage = {};
+    if (month) matchStage.month = Number(month);
+    if (year)  matchStage.year  = Number(year);
+
+    // ── 1. Condition distribution (name + count) ─────────────────────────────
+    const conditionAgg = await Epidemiology.aggregate([
+      { $match: matchStage },
+      { $group: { _id: '$condition', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+
+    const totalDiagnoses = conditionAgg.reduce((s, c) => s + c.count, 0);
+
+    const conditions = conditionAgg.map(c => ({
+      condition: c._id,
+      count: c.count,
+      percentage: totalDiagnoses > 0 ? +((c.count / totalDiagnoses) * 100).toFixed(1) : 0
+    }));
+
+    // ── 2. Gender breakdown per condition ────────────────────────────────────
+    const genderAgg = await Epidemiology.aggregate([
+      { $match: matchStage },
+      { $group: { _id: { condition: '$condition', gender: '$gender' }, count: { $sum: 1 } } },
+      { $sort: { '_id.condition': 1 } }
+    ]);
+
+    // Build a map: condition → { Male, Female, Other, Unknown }
+    const genderMap = {};
+    genderAgg.forEach(({ _id: { condition, gender }, count }) => {
+      if (!genderMap[condition]) genderMap[condition] = { Male: 0, Female: 0, Other: 0, Unknown: 0 };
+      genderMap[condition][gender] = (genderMap[condition][gender] || 0) + count;
+    });
+
+    const genderBreakdown = Object.entries(genderMap).map(([condition, counts]) => {
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      return {
+        condition,
+        Male:    counts.Male    || 0,
+        Female:  counts.Female  || 0,
+        Other:   counts.Other   || 0,
+        Unknown: counts.Unknown || 0,
+        malePct:    total > 0 ? +((counts.Male   / total) * 100).toFixed(1) : 0,
+        femalePct:  total > 0 ? +((counts.Female / total) * 100).toFixed(1) : 0,
+      };
+    });
+
+    // ── 3. Age-range breakdown per condition ─────────────────────────────────
+    const ageAgg = await Epidemiology.aggregate([
+      { $match: matchStage },
+      { $group: { _id: { condition: '$condition', ageRange: '$ageRange' }, count: { $sum: 1 } } },
+      { $sort: { '_id.condition': 1, '_id.ageRange': 1 } }
+    ]);
+
+    const AGE_BUCKETS = ['0-10','11-20','21-30','31-40','41-50','51-60','61-70','71+','Unknown'];
+    const ageMap = {};
+    ageAgg.forEach(({ _id: { condition, ageRange }, count }) => {
+      if (!ageMap[condition]) {
+        ageMap[condition] = {};
+        AGE_BUCKETS.forEach(b => (ageMap[condition][b] = 0));
+      }
+      ageMap[condition][ageRange] = count;
+    });
+
+    const ageBreakdown = Object.entries(ageMap).map(([condition, buckets]) => ({
+      condition,
+      buckets
+    }));
+
+    // ── 4. Monthly trend (all months in the year, or across all years) ───────
+    const trendMatch = year ? { year: Number(year) } : {};
+    const trendAgg = await Epidemiology.aggregate([
+      { $match: trendMatch },
+      { $group: { _id: { month: '$month', year: '$year', condition: '$condition' }, count: { $sum: 1 } } },
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]);
+
+    // Build a monthly trend: [{ month: 1, year: 2026, condition: 'Malaria', count: 5 }, ...]
+    const monthlyTrend = trendAgg.map(({ _id: { month, year, condition }, count }) => ({
+      month, year, condition, count
+    }));
+
+    res.status(200).json({
+      totalDiagnoses,
+      conditions,
+      genderBreakdown,
+      ageBreakdown,
+      monthlyTrend,
+      ageRangeBuckets: AGE_BUCKETS
+    });
+  } catch (error) {
+    console.error('getEpidemiologyStats error:', error);
+    res.status(500).json({ message: 'Error fetching epidemiology statistics', error: error.message });
+  }
+};
+
+export const getAllPills = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Only admins can view the pills report.' });
+    }
+
+    const patients = await User.find({ role: 'client' }).select('name medicalHistory');
+
+    const pills = [];
+    patients.forEach(patient => {
+      if (Array.isArray(patient.medicalHistory)) {
+        patient.medicalHistory.forEach(history => {
+          if (Array.isArray(history.medications)) {
+            history.medications.forEach(med => {
+              pills.push({
+                patientName: patient.name,
+                condition: history.condition || 'N/A',
+                pillName: med.name || 'Unknown',
+                dosage: med.dosage || 'N/A',
+                frequency: med.frequency || 'N/A',
+                startDate: med.startDate ? new Date(med.startDate).toLocaleDateString() : 'N/A',
+                endDate: med.endDate ? new Date(med.endDate).toLocaleDateString() : 'N/A',
+                prescribedDate: history.diagnosisDate ? new Date(history.diagnosisDate).toLocaleDateString() : 'N/A'
+              });
+            });
+          }
+        });
+      }
+    });
+
+    res.status(200).json({ pills });
+  } catch (error) {
+    console.error('getAllPills error:', error);
+    res.status(500).json({ message: 'Error fetching pills report', error: error.message });
+  }
+};
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const adminId = req.user.userId;
+    const account = await Admin.findById(adminId).select('-password');
+    if (!account) {
+      return res.status(404).json({ message: 'Admin profile not found' });
+    }
+    res.status(200).json({ user: account });
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving admin profile', error: error.message });
+  }
+};
+
+export const updateAdminProfile = async (req, res) => {
+  try {
+    const adminId = req.user.userId;
+    const { name, email, address, telephone, gender, profilepicture } = req.body;
+
+    const account = await Admin.findById(adminId);
+    if (!account) {
+      return res.status(404).json({ message: 'Admin profile not found' });
+    }
+
+    account.name = name ?? account.name;
+    account.email = email ?? account.email;
+    account.address = address ?? account.address;
+    account.telephone = telephone ?? account.telephone;
+    account.gender = gender ?? account.gender;
+    account.profilepicture = profilepicture ?? account.profilepicture;
+
+    await account.save();
+    res.status(200).json({ message: 'Admin profile updated successfully', user: account });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating admin profile', error: error.message });
   }
 };

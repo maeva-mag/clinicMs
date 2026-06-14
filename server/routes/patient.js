@@ -28,5 +28,5 @@ router.post('/appointments/:userId', authenticateToken, allowRoles(['client']), 
 router.get('/appointments/:userId', authenticateToken, allowRoles(['admin', 'doctor', 'nurse', 'client']), getAppointments);
 router.delete('/appointments/:userId/:appointmentId', authenticateToken, allowRoles(['client', 'admin']), cancelAppointment);
 
-router.get('/bills/:userId', authenticateToken, allowRoles(['client']), getPatientBills);
+router.get('/bills/:userId', authenticateToken, allowRoles(['client', 'admin', 'doctor', 'nurse']), getPatientBills);
 export default router;

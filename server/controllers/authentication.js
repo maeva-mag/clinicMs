@@ -87,8 +87,9 @@ export const login = async (req, res) => {
         }
         const models= [Admin, Doctor, Nurse, ];
         let user = null;
+        const emailRegex = new RegExp(`^${email}$`, 'i');
         for (const model of models) {
-            user = await model.findOne({ email });
+            user = await model.findOne({ email: emailRegex });
             if (user) break;
         }
         if (!user) {
@@ -133,9 +134,10 @@ export const setStaffPassword = async (req, res) => {
         const {email, password, confirmPassword} = req.body;
 
         // Search in all staff-related models
-        let staff = await Admin.findOne({ email });
-        if (!staff) staff = await Doctor.findOne({ email });
-        if (!staff) staff = await Nurse.findOne({ email });
+        const emailRegex = new RegExp(`^${email}$`, 'i');
+        let staff = await Admin.findOne({ email: emailRegex });
+        if (!staff) staff = await Doctor.findOne({ email: emailRegex });
+        if (!staff) staff = await Nurse.findOne({ email: emailRegex });
 
         if (!staff) return res.status(404).json({ message: 'Staff member not found' });
 

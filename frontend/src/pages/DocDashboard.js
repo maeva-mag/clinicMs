@@ -12,7 +12,8 @@ import {
   FaRegClock, 
   FaCheckCircle, 
   FaArrowLeft, 
-  FaSyncAlt 
+  FaSyncAlt,
+  FaSearch
 } from 'react-icons/fa';
 
 const DocDashboard = () => {
@@ -29,6 +30,7 @@ const DocDashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [appointmentFilter, setAppointmentFilter] = useState('all');
   const [editMode, setEditMode] = useState(false);
   const [profileForm, setProfileForm] = useState({
     name: '',
@@ -43,15 +45,119 @@ const DocDashboard = () => {
 
   const [showProfileTab, setShowProfileTab] = useState(false);
   const [personalShifts, setPersonalShifts] = useState([]);
+  const [allPatients, setAllPatients] = useState([]);
+
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+
+  // Patient action menu state
+  const [actionMenu, setActionMenu] = useState(null); // { patientId, patientName, x, y }
+
+  // Patient profile view (no payments/appointments)
+  const [viewingProfile, setViewingProfile] = useState(null); // { profile, medicalHistory }
+
+  // Prescription modal
+  const [prescriptionModal, setPrescriptionModal] = useState(null); // { patientId, patientName }
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    condition: '',
+    diagnosisDate: new Date().toISOString().split('T')[0],
+    treatment: '',
+    notes: '',
+    medications: [{ name: '', dosage: '', frequency: '' }],
+  });
+  const [prescriptionLoading, setPrescriptionLoading] = useState(false);
+  const [prescriptionSuccess, setPrescriptionSuccess] = useState('');
+
+  // Open the action-choice menu when a patient name is clicked
+  const handlePatientClick = (patientId, patientName, e) => {
+    e.stopPropagation();
+    setActionMenu({ patientId, patientName });
+  };
+
+  // Load and show the patient profile view (no payments/appointments)
+  const handleViewProfile = async (patientId) => {
+    setActionMenu(null);
+    setError('');
+    try {
+      const [profileRes, historyRes] = await Promise.all([
+        API.get(`/patients/profile/${patientId}`),
+        API.get(`/patients/medicalHistory/${patientId}`),
+      ]);
+      setViewingProfile({
+        profile: profileRes.data.user,
+        medicalHistory: historyRes.data.medicalHistory,
+      });
+    } catch (err) {
+      console.error('Error loading patient profile:', err);
+      setError('Failed to load patient profile');
+    }
+  };
+
+  // Open the prescription writing modal
+  const handleOpenPrescription = (patientId, patientName) => {
+    setActionMenu(null);
+    setPrescriptionForm({
+      condition: '',
+      diagnosisDate: new Date().toISOString().split('T')[0],
+      treatment: '',
+      notes: '',
+      medications: [{ name: '', dosage: '', frequency: '' }],
+    });
+    setPrescriptionSuccess('');
+    setPrescriptionModal({ patientId, patientName });
+  };
+
+  // Handle medication row changes
+  const handleMedChange = (idx, field, value) => {
+    const updated = prescriptionForm.medications.map((m, i) =>
+      i === idx ? { ...m, [field]: value } : m
+    );
+    setPrescriptionForm({ ...prescriptionForm, medications: updated });
+  };
+
+  const addMedRow = () =>
+    setPrescriptionForm({
+      ...prescriptionForm,
+      medications: [...prescriptionForm.medications, { name: '', dosage: '', frequency: '' }],
+    });
+
+  const removeMedRow = (idx) =>
+    setPrescriptionForm({
+      ...prescriptionForm,
+      medications: prescriptionForm.medications.filter((_, i) => i !== idx),
+    });
+
+  // Submit prescription to backend
+  const handleSubmitPrescription = async (e) => {
+    e.preventDefault();
+    if (!prescriptionForm.condition.trim()) {
+      setError('Condition / Diagnosis is required.');
+      return;
+    }
+    setPrescriptionLoading(true);
+    setError('');
+    try {
+      await API.post(`/doctors/prescription/${prescriptionModal.patientId}`, prescriptionForm);
+      setPrescriptionSuccess('Prescription written successfully! It has been added to the patient\'s medical records.');
+      // Refresh dashboard data so the records tab updates
+      fetchDashboard();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to write prescription');
+    } finally {
+      setPrescriptionLoading(false);
+    }
+  };
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes] = await Promise.all([
+      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes, allPatientsRes] = await Promise.all([
         API.get(`/doctors/doctorProfile/${doctorId}`),
         API.get(`/doctors/doctorPrescriptions/${doctorId}`),
         API.get(`/doctors/doctorAppointments/${doctorId}`),
         API.get(`/shifts/personal`),
+        API.get('/doctors/patients'),
       ]);
 
       const doctorProfile = profileRes.data.doctor || null;
@@ -72,6 +178,7 @@ const DocDashboard = () => {
 
       setAppointments(appointmentsRes.data.appointments || []);
       setPersonalShifts(shiftsRes.data.shifts || []);
+      setAllPatients(allPatientsRes.data.patients || []);
 
       const historyRecords = [];
       patientList.forEach((patient) => {
@@ -122,6 +229,22 @@ const DocDashboard = () => {
     setProfileForm({ ...profileForm, [name]: value });
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('Image file is too large (maximum size is 2MB)');
+        setTimeout(() => setError(''), 4000);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileForm(prev => ({ ...prev, profilepicture: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -151,6 +274,16 @@ const DocDashboard = () => {
     });
   };
 
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    if (val.trim().length > 0) {
+      const filtered = allPatients.filter(p => p.name && p.name.toLowerCase().includes(val.toLowerCase()));
+      setSuggestions(filtered.slice(0, 5));
+    } else {
+      setSuggestions([]);
+    }
+  };
+
   const getAppointmentsForToday = () => {
     const today = new Date().toISOString().split('T')[0];
     return appointments.filter(apt => {
@@ -165,6 +298,15 @@ const DocDashboard = () => {
       type: apt.reason || 'Consultation'
     }));
   };
+
+  const getFollowUpsForToday = () => {
+    return getAppointmentsForToday().filter(apt => apt.type === 'Follow-up');
+  };
+
+  const getConsultationsForToday = () => {
+    return getAppointmentsForToday().filter(apt => apt.type === 'Consultation');
+  };
+
 
   const getDoctorDisplayName = () => {
     const name = profile?.account?.name;
@@ -225,8 +367,13 @@ const DocDashboard = () => {
               </select>
             </div>
             <div className="form-row">
-              <label>Profile Picture URL</label>
-              <input type="text" name="profilepicture" value={profileForm.profilepicture} onChange={handleProfileChange} placeholder="Profile picture URL" />
+              <label>Profile Picture</label>
+              <input type="file" accept="image/*" onChange={handleImageChange} />
+              {profileForm.profilepicture && (
+                <div style={{ marginTop: '10px' }}>
+                  <img src={profileForm.profilepicture} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #2f6dff' }} />
+                </div>
+              )}
             </div>
             <div className="form-actions">
               <button type="submit" className="submit-btn">Save Changes</button>
@@ -307,12 +454,60 @@ const DocDashboard = () => {
             <tbody>
               {patients.map((patient) => (
                 <tr key={patient._id}>
-                  <td><strong>{patient.name || 'N/A'}</strong></td>
+                  <td>
+                    <span 
+                      onClick={(e) => handlePatientClick(patient._id, patient.name, e)} 
+                      style={{ color: '#3498db', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
+                    >
+                      {patient.name || 'N/A'}
+                    </span>
+                  </td>
                   <td>{patient.age || 'N/A'}</td>
                   <td>{patient.gender || 'N/A'}</td>
                   <td>
                     <span className="badge">
                       {(patient.medicalHistory || []).length} medical records
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAllPatients = () => (
+    <div className="table-card">
+      <h2>All Patients List</h2>
+      {allPatients.length === 0 ? (
+        <p className="no-data">No patients found.</p>
+      ) : (
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPatients.map((patient) => (
+                <tr key={patient._id}>
+                  <td>
+                    <span 
+                      onClick={(e) => handlePatientClick(patient._id, patient.name, e)} 
+                      style={{ color: '#3498db', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
+                    >
+                      {patient.name || 'N/A'}
+                    </span>
+                  </td>
+                  <td>{patient.email || 'N/A'}</td>
+                  <td>
+                    <span className={`badge ${patient.patientType === 'Onsite' ? 'patient-onsite' : 'patient-registered'}`}>
+                      {patient.patientType || 'Registered'}
                     </span>
                   </td>
                 </tr>
@@ -344,7 +539,14 @@ const DocDashboard = () => {
             <tbody>
               {records.map((record, index) => (
                 <tr key={`${record.patientId}-${index}`}>
-                  <td><strong>{record.patientName || 'N/A'}</strong></td>
+                  <td>
+                    <span 
+                      onClick={(e) => handlePatientClick(record.patientId, record.patientName, e)} 
+                      style={{ color: '#3498db', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
+                    >
+                      {record.patientName || 'N/A'}
+                    </span>
+                  </td>
                   <td>{record.condition || 'N/A'}</td>
                   <td>{record.treatment || 'N/A'}</td>
                   <td>{record.diagnosisDate ? new Date(record.diagnosisDate).toLocaleDateString() : 'N/A'}</td>
@@ -380,6 +582,50 @@ const DocDashboard = () => {
           </div>
         </div>
         <div className="header-actions">
+          <div className="search-container" style={{ position: 'relative', marginRight: '10px' }}>
+            <div 
+              onClick={() => setShowSearch(!showSearch)} 
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#fff', borderRadius: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', color: '#3498db', border: '1px solid #d7e2f4' }}
+            >
+              <FaSearch /> <span style={{ fontSize: '13px', fontWeight: '500' }}>Search Patient</span>
+            </div>
+            
+            {showSearch && (
+              <div style={{ position: 'absolute', top: '45px', right: 0, background: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '10px', width: '250px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                <input 
+                  type="text" 
+                  placeholder="Type name..." 
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', color: '#000' }}
+                  autoFocus
+                />
+                {suggestions.length > 0 && (
+                  <div style={{ marginTop: '8px', borderTop: '1px solid #eee', maxHeight: '150px', overflowY: 'auto' }}>
+                    {suggestions.map(p => (
+                      <div 
+                        key={p._id} 
+                        onClick={(e) => {
+                          handlePatientClick(p._id, p.name, e);
+                          setShowSearch(false);
+                          setSearchQuery('');
+                          setSuggestions([]);
+                        }}
+                        style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #f9f9f9', fontSize: '13px', color: '#333' }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        {p.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {searchQuery.trim().length > 0 && suggestions.length === 0 && (
+                  <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>No matches found</div>
+                )}
+              </div>
+            )}
+          </div>
           <button type="button" className="refresh-btn" onClick={fetchDashboard}>
             <FaSyncAlt /> Refresh
           </button>
@@ -401,7 +647,7 @@ const DocDashboard = () => {
           ) : (
             <>
               <div className="stats-grid">
-                <div className="stat-card appointments">
+                <div className="stat-card appointments" style={{ cursor: 'pointer' }} onClick={() => { setActiveTab('overview'); setAppointmentFilter('all'); setShowProfileTab(false); }}>
                   <div className="stat-info">
                     <h3>Today's Appointments</h3>
                     <p>{getAppointmentsForToday().length}</p>
@@ -411,30 +657,30 @@ const DocDashboard = () => {
                   </div>
                 </div>
 
-                <div className="stat-card patients">
+                <div className="stat-card patients" style={{ cursor: 'pointer' }} onClick={() => { setActiveTab('allPatients'); setShowProfileTab(false); }}>
                   <div className="stat-info">
                     <h3>Total Patients</h3>
-                    <p>{patients.length === 0 ? 127 : patients.length}</p>
+                    <p>{allPatients.length}</p>
                   </div>
                   <div className="stat-icon-wrapper">
                     <FaUsers />
                   </div>
                 </div>
 
-                <div className="stat-card reviews">
+                <div className="stat-card reviews" style={{ cursor: 'pointer' }} onClick={() => { setActiveTab('overview'); setAppointmentFilter('Follow-up'); setShowProfileTab(false); }}>
                   <div className="stat-info">
-                    <h3>Pending Reviews</h3>
-                    <p>{records.length === 0 ? 8 : records.length}</p>
+                    <h3>Follow-up</h3>
+                    <p>{getFollowUpsForToday().length}</p>
                   </div>
                   <div className="stat-icon-wrapper">
                     <FaRegFileAlt />
                   </div>
                 </div>
 
-                <div className="stat-card consultations">
+                <div className="stat-card consultations" style={{ cursor: 'pointer' }} onClick={() => { setActiveTab('overview'); setAppointmentFilter('Consultation'); setShowProfileTab(false); }}>
                   <div className="stat-info">
                     <h3>Consultations</h3>
-                    <p>{patients.length === 0 ? 23 : patients.length + 15}</p>
+                    <p>{getConsultationsForToday().length}</p>
                   </div>
                   <div className="stat-icon-wrapper">
                     <FaHeartbeat />
@@ -458,6 +704,13 @@ const DocDashboard = () => {
                   Assigned Patients
                 </button>
                 <button 
+                  className={`tab ${activeTab === 'allPatients' ? 'active' : ''}`} 
+                  type="button" 
+                  onClick={() => { setActiveTab('allPatients'); setShowProfileTab(false); }}
+                >
+                  All Patients
+                </button>
+                <button 
                   className={`tab ${activeTab === 'records' ? 'active' : ''}`} 
                   type="button" 
                   onClick={() => { setActiveTab('records'); setShowProfileTab(false); }}
@@ -478,29 +731,50 @@ const DocDashboard = () => {
                   <div className="dashboard-content-grid">
                     <div className="schedule-container">
                       <div className="schedule-header">
-                        <h2>Today's Appointments</h2>
+                        <h2>
+                          Today's {appointmentFilter === 'all' ? '' : appointmentFilter + ' '}Appointments
+                          {appointmentFilter !== 'all' && (
+                            <button 
+                              onClick={() => setAppointmentFilter('all')} 
+                              style={{ marginLeft: '10px', fontSize: '12px', color: '#3498db', border: 'none', background: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                              Show All
+                            </button>
+                          )}
+                        </h2>
                         <p>Your schedule for {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                       </div>
                       <div className="appointments-list">
-                        {getAppointmentsForToday().map((apt) => (
-                          <div className="appointment-card" key={apt.id}>
-                            <div className="appointment-card-header">
-                              <span className="appointment-time-badge">
-                                <FaRegClock /> {apt.time}
-                              </span>
-                              <span className={`appointment-type-tag ${apt.type.toLowerCase().replace(' ', '-')}`}>
-                                {apt.type}
-                              </span>
+                        {(() => {
+                          const todayApts = getAppointmentsForToday();
+                          const filtered = appointmentFilter === 'all'
+                            ? todayApts
+                            : todayApts.filter(apt => apt.type === appointmentFilter);
+                          
+                          if (filtered.length === 0) {
+                            return <p style={{ fontStyle: 'italic', color: '#94a3b8', padding: '15px 0' }}>No {appointmentFilter === 'all' ? '' : appointmentFilter.toLowerCase() + ' '}appointments scheduled for today.</p>;
+                          }
+
+                          return filtered.map((apt) => (
+                            <div className="appointment-card" key={apt.id}>
+                              <div className="appointment-card-header">
+                                <span className="appointment-time-badge">
+                                  <FaRegClock /> {apt.time}
+                                </span>
+                                <span className={`appointment-type-tag ${apt.type.toLowerCase().replace(' ', '-')}`}>
+                                  {apt.type}
+                                </span>
+                              </div>
+                              <div className="appointment-card-body">
+                                <h3 className="appointment-patient-name" style={{ color: '#2c3e50' }}>{apt.patientName}</h3>
+                                <p className="appointment-reason" style={{ margin: '5px 0' }}>{apt.reason}</p>
+                              </div>
+                              <div className="appointment-card-footer" style={{ borderTop: '1px solid #f1f5f9', paddingTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                                <FaCheckCircle /> {apt.status}
+                              </div>
                             </div>
-                            <div className="appointment-card-body">
-                              <h3 className="appointment-patient-name">{apt.patientName}</h3>
-                              <p className="appointment-reason">{apt.reason}</p>
-                            </div>
-                            <div className="appointment-card-footer">
-                              <FaCheckCircle /> {apt.status}
-                            </div>
-                          </div>
-                        ))}
+                          ));
+                        })()}
                       </div>
                     </div>
 
@@ -512,8 +786,9 @@ const DocDashboard = () => {
                     </div>
                   </div>
                 )}
-                {activeTab === 'patients' && renderPatients()}
-                {activeTab === 'records' && renderRecords()}
+                 {activeTab === 'patients' && renderPatients()}
+                 {activeTab === 'allPatients' && renderAllPatients()}
+                 {activeTab === 'records' && renderRecords()}
                 {activeTab === 'shifts' && (
                   <div className="table-card">
                     <h2>My Personal Shift Timetable</h2>
@@ -548,6 +823,223 @@ const DocDashboard = () => {
             </>
           )}
         </>
+      )}
+      
+      {/* ── ACTION MENU ── */}
+      {actionMenu && (
+        <div
+          className="patient-action-overlay"
+          onClick={() => setActionMenu(null)}
+        >
+          <div className="patient-action-menu" onClick={(e) => e.stopPropagation()}>
+            <div className="patient-action-header">
+              <span className="patient-action-icon">👤</span>
+              <div>
+                <p className="patient-action-title">Select Action</p>
+                <p className="patient-action-name">{actionMenu.patientName}</p>
+              </div>
+              <button className="patient-action-close" onClick={() => setActionMenu(null)}>✕</button>
+            </div>
+            <div className="patient-action-buttons">
+              <button
+                className="action-btn action-btn-profile"
+                onClick={() => handleViewProfile(actionMenu.patientId)}
+              >
+                <span className="action-btn-icon">🩺</span>
+                <div>
+                  <strong>View Profile</strong>
+                  <p>Patient info &amp; medical history</p>
+                </div>
+              </button>
+              <button
+                className="action-btn action-btn-prescription"
+                onClick={() => handleOpenPrescription(actionMenu.patientId, actionMenu.patientName)}
+              >
+                <span className="action-btn-icon">✍️</span>
+                <div>
+                  <strong>Write Prescription</strong>
+                  <p>Send to patient's medical records</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PATIENT PROFILE MODAL (no payments / appointments) ── */}
+      {viewingProfile && (
+        <div className="modal-overlay" onClick={() => setViewingProfile(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setViewingProfile(null)}>✕</button>
+            <h2 className="modal-title">Patient Profile — {viewingProfile.profile?.name}</h2>
+
+            <div className="modal-two-col">
+              {/* Left: personal info */}
+              <div className="modal-section">
+                <h3 className="modal-section-title">Personal Information</h3>
+                {[
+                  ['Name', viewingProfile.profile?.name],
+                  ['Email', viewingProfile.profile?.email],
+                  ['Age', viewingProfile.profile?.age],
+                  ['Gender', viewingProfile.profile?.gender],
+                  ['Blood Type', viewingProfile.profile?.bloodType],
+                  ['Telephone', viewingProfile.profile?.telephone],
+                  ['Address', viewingProfile.profile?.address],
+                  ['Allergies', (viewingProfile.profile?.allergies || []).join(', ') || 'None'],
+                  ['Emergency Contact', viewingProfile.profile?.emergencyContact],
+                ].map(([label, val]) => (
+                  <div key={label} className="modal-field">
+                    <span className="modal-field-label">{label}</span>
+                    <span className="modal-field-value">{val || 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: medical history entries */}
+              <div className="modal-section">
+                <h3 className="modal-section-title">Medical History</h3>
+                {Array.isArray(viewingProfile.medicalHistory) && viewingProfile.medicalHistory.length > 0 ? (
+                  <div className="med-history-list">
+                    {viewingProfile.medicalHistory.map((entry, i) => (
+                      <div key={i} className="med-history-card">
+                        <div className="med-history-row">
+                          <span className="med-badge">{entry.condition || 'Unknown condition'}</span>
+                          <span className="med-date">{entry.diagnosisDate ? new Date(entry.diagnosisDate).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        {entry.treatment && <p className="med-treatment"><strong>Treatment:</strong> {entry.treatment}</p>}
+                        {entry.prescribedBy?.name && (
+                          <p className="med-prescribed">Prescribed by: {entry.prescribedBy.name}</p>
+                        )}
+                        {entry.medications && entry.medications.length > 0 && (
+                          <div className="med-meds">
+                            <strong>Medications:</strong>
+                            <ul>
+                              {entry.medications.map((m, mi) => (
+                                <li key={mi}>{m.name} — {m.dosage}, {m.frequency}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="modal-empty">No medical history recorded yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── WRITE PRESCRIPTION MODAL ── */}
+      {prescriptionModal && (
+        <div className="modal-overlay" onClick={() => { if (!prescriptionLoading) setPrescriptionModal(null); }}>
+          <div className="modal-box modal-box-wide" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setPrescriptionModal(null)} disabled={prescriptionLoading}>✕</button>
+            <h2 className="modal-title">✍️ Write Prescription</h2>
+            <p className="modal-subtitle">Patient: <strong>{prescriptionModal.patientName}</strong></p>
+
+            {prescriptionSuccess ? (
+              <div className="prescription-success">
+                <span className="prescription-success-icon">✅</span>
+                <p>{prescriptionSuccess}</p>
+                <button
+                  className="action-btn action-btn-profile"
+                  style={{ width: '100%', marginTop: '12px' }}
+                  onClick={() => setPrescriptionModal(null)}
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <form className="prescription-form" onSubmit={handleSubmitPrescription}>
+                <div className="prx-two-col">
+                  <div className="prx-field">
+                    <label>Condition / Diagnosis <span className="req">*</span></label>
+                    <input
+                      type="text"
+                      value={prescriptionForm.condition}
+                      onChange={(e) => setPrescriptionForm({ ...prescriptionForm, condition: e.target.value })}
+                      placeholder="e.g. Hypertension"
+                      required
+                    />
+                  </div>
+                  <div className="prx-field">
+                    <label>Diagnosis Date</label>
+                    <input
+                      type="date"
+                      value={prescriptionForm.diagnosisDate}
+                      onChange={(e) => setPrescriptionForm({ ...prescriptionForm, diagnosisDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="prx-field">
+                  <label>Treatment Plan</label>
+                  <textarea
+                    rows={3}
+                    value={prescriptionForm.treatment}
+                    onChange={(e) => setPrescriptionForm({ ...prescriptionForm, treatment: e.target.value })}
+                    placeholder="Describe the treatment plan..."
+                  />
+                </div>
+
+                <div className="prx-field">
+                  <label>Additional Notes</label>
+                  <textarea
+                    rows={2}
+                    value={prescriptionForm.notes}
+                    onChange={(e) => setPrescriptionForm({ ...prescriptionForm, notes: e.target.value })}
+                    placeholder="Follow-up instructions, lifestyle advice, etc."
+                  />
+                </div>
+
+                {/* Medications */}
+                <div className="prx-field">
+                  <div className="prx-med-header">
+                    <label>Medications</label>
+                    <button type="button" className="prx-add-med" onClick={addMedRow}>+ Add</button>
+                  </div>
+                  {prescriptionForm.medications.map((med, idx) => (
+                    <div key={idx} className="prx-med-row">
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={med.name}
+                        onChange={(e) => handleMedChange(idx, 'name', e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Dosage"
+                        value={med.dosage}
+                        onChange={(e) => handleMedChange(idx, 'dosage', e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Frequency"
+                        value={med.frequency}
+                        onChange={(e) => handleMedChange(idx, 'frequency', e.target.value)}
+                      />
+                      {prescriptionForm.medications.length > 1 && (
+                        <button type="button" className="prx-remove-med" onClick={() => removeMedRow(idx)}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {error && <div className="alert alert-error" style={{ marginBottom: '10px' }}>{error}</div>}
+
+                <div className="prx-actions">
+                  <button type="button" className="cancel-btn" onClick={() => setPrescriptionModal(null)} disabled={prescriptionLoading}>Cancel</button>
+                  <button type="submit" className="submit-btn" disabled={prescriptionLoading}>
+                    {prescriptionLoading ? 'Submitting...' : '✅ Submit Prescription'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -46,11 +46,11 @@ export const updateUserProfile = async (req, res) => {
     const { userId } = req.params;
 
     // Only allow updating certain fields
-    const { name, age, gender, bloodType, address, telephone, allergies, email } = req.body;
+    const { name, age, gender, bloodType, address, telephone, allergies, email, profilepicture } = req.body;
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { name, age, gender, bloodType, address, telephone, allergies, email },
+      { name, age, gender, bloodType, address, telephone, allergies, email, profilepicture },
       { new: true, runValidators: true }
     );
 
@@ -78,21 +78,62 @@ export const getMedicalHistory = async (req, res) => {
 export const makeAppointment = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { doctorId, date, time } = req.body;
+    const { doctorId, date, time, reason, paymentMethod } = req.body;
+
+    if (!doctorId || !date || !time) {
+      return res.status(400).json({ message: 'Doctor ID, date, and time are required' });
+    }
 
     const newAppointment = new Appointment({
       doctor: doctorId,
       patient: userId,
-      date,
+      appointmentDate: new Date(date),
       time,
-      status: 'pending'
+      reason: reason || 'Consultation',
+      status: reason === 'Follow-up' ? 'confirmed' : 'pending'
     });
 
+    if (reason === 'Follow-up') {
+      newAppointment.status = 'confirmed';
+      await newAppointment.save();
+      return res.status(201).json({ message: 'Appointment created successfully', appointment: newAppointment });
+    }
+
+    // For Consultation, process payment and confirm appointment
+    const payment = new Payment({
+      appointment: newAppointment._id,
+      patient: userId,
+      amount: 1000,
+      method: 'mobile money',
+      status: 'completed'
+    });
+    await payment.save();
+
+    const billing = new Billing({
+      patient: userId,
+      charges: [{
+        description: "Consultation Fee",
+        amount: 1000,
+        unit: "FCFA"
+      }],
+      totalcharges: 1000,
+      totalpayment: 1000,
+      balance: 0,
+      paymentsandadjustments: [{
+        description: `Payment via ${paymentMethod || 'MTN Mobile Money'}`,
+        amount: 1000
+      }]
+    });
+    await billing.save();
+
+    newAppointment.payment = payment._id;
+    newAppointment.status = 'confirmed';
     await newAppointment.save();
 
-    res.status(201).json({ message: 'Appointment created, awaiting payment', appointment: newAppointment });
+    res.status(201).json({ message: 'Appointment created and payment recorded', appointment: newAppointment, billing });
   } catch (error) {
-    res.status(500).json({ message: 'Error creating appointment' });
+    console.error('makeAppointment error:', error);
+    res.status(500).json({ message: 'Error creating appointment', error: error.message });
   }
 };
 
@@ -132,16 +173,32 @@ export const makePayment = async (req, res) => {
 
 
 // get all appointments 
-export const getAppointments=async(req,res)=>{
-    try{
-        const {userId} = req.params;
-        const appointments = await Appointment.find({ patient: userId });
-        res.status(200).json({ appointments });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching appointments' });
+export const getAppointments = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const appointments = await Appointment.find({ patient: userId });
 
-    }
+    // Enrich each appointment with doctor name (doctor field is a string ID)
+    const Doctor = (await import('../model/doctor.js')).default;
+    const enriched = await Promise.all(appointments.map(async (apt) => {
+      const aptObj = apt.toObject();
+      if (apt.doctor) {
+        try {
+          const doc = await Doctor.findById(apt.doctor).select('name department');
+          if (doc) {
+            aptObj.doctor = { _id: doc._id, name: doc.name, department: doc.department };
+          }
+        } catch (_) { /* keep as string if lookup fails */ }
+      }
+      return aptObj;
+    }));
+
+    res.status(200).json({ appointments: enriched });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching appointments' });
+  }
 };
+
 
 // Cancel appointment
 
@@ -177,13 +234,13 @@ export const cancelAppointment = async (req, res) => {
   }
 };
 
-// Patient views their own bills
+// Patient views their own bills (also viewable by admin, doctor, nurse)
 export const getPatientBills = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    if (req.user.role !== 'client') {
-      return res.status(403).json({ message: 'Access denied. Only patients can view their bills.' });
+    if (!['client', 'admin', 'doctor', 'nurse'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied.' });
     }
 
     const bills = await Billing.find({ patient: userId })

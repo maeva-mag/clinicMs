@@ -133,17 +133,25 @@ export const dischargePatient = async (req, res) => {
 //get all patients (onsite and registered)
 export const getAllPatients = async (req, res) => {
   try {
-    if (req.user.role !== 'nurse' && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Only nurses and admins can view all patients.' });
+    if (req.user.role !== 'nurse' && req.user.role !== 'admin' && req.user.role !== 'doctor') {
+      return res.status(403).json({ message: 'Access denied. Only nurses, doctors, and admins can view all patients.' });
     }
 
     const onsitePatients = await NonUser.find().populate('registeredBy', 'name role');
     const registeredPatients = await User.find({ role: 'client' });
     
-    // Combine both lists
+    // Combine both lists and ensure registeredOn is defined for all
     const allPatients = [
-      ...onsitePatients.map(p => ({ ...p._doc, patientType: 'Onsite' })),
-      ...registeredPatients.map(p => ({ ...p._doc, patientType: 'Registered' }))
+      ...onsitePatients.map(p => ({ 
+        ...p._doc, 
+        patientType: 'Onsite', 
+        registeredOn: p.registeredOn || p._id.getTimestamp() 
+      })),
+      ...registeredPatients.map(p => ({ 
+        ...p._doc, 
+        patientType: 'Registered', 
+        registeredOn: p._id.getTimestamp() 
+      }))
     ];
 
     res.status(200).json({ patients: allPatients });
@@ -155,37 +163,56 @@ export const getAllPatients = async (req, res) => {
 // Create a new billing record for a patient
 export const createBilling = async (req, res) => {
   try {
-    if (req.user.role !== 'nurse') {
+    if (req.user.role !== 'nurse' && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied. Only nurses can create billing records.' });
     }
 
-    const { patientId, charges, paymentsandadjustments } = req.body;
+    const { patientName, charges, paymentsandadjustments } = req.body;
 
-    // Verify patient exists
-    const patient = await User.findById(patientId);
-    if (!patient || patient.role !== 'client') {
-      return res.status(400).json({ message: 'Invalid patient ID. Must be a registered patient.' });
+    if (!patientName || patientName.trim() === '') {
+      return res.status(400).json({ message: 'Patient name is required.' });
+    }
+
+    // Try to find a matching patient in User (registered client) by name (case-insensitive)
+    let patient = await User.findOne({ name: { $regex: new RegExp(`^${patientName.trim()}$`, 'i') }, role: 'client' });
+    let patientModel = 'User';
+    let patientId = null;
+
+    if (!patient) {
+      // Try to find in NonUser (onsite patient)
+      patient = await NonUser.findOne({ name: { $regex: new RegExp(`^${patientName.trim()}$`, 'i') } });
+      patientModel = 'NonUser';
+    }
+
+    if (patient) {
+      patientId = patient._id;
+    } else {
+      patientModel = undefined; // Do not save dynamic ref if patient is not in db
     }
 
     // Calculate totals
-    const totalCharges = charges.reduce((sum, c) => sum + c.amount, 0);
-    const totalPayments = paymentsandadjustments.reduce((sum, p) => sum + p.amount, 0);
+    const totalCharges = (charges || []).reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const totalPayments = (paymentsandadjustments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const balance = totalCharges - totalPayments;
 
     const billing = new Billing({
+      patientName: patientName.trim(),
       patient: patientId,
-      charges,
+      patientModel,
+      charges: charges || [],
       totalcharges: totalCharges,
       totalpayment: totalPayments,
       balance,
-      paymentsandadjustments
+      paymentsandadjustments: paymentsandadjustments || [],
+      createdBy: req.user.userId || req.user._id
     });
 
     await billing.save();
 
     res.status(201).json({ message: 'Billing record created successfully', billing });
   } catch (error) {
-    res.status(500).json({ message: 'Error creating billing record', error });
+    console.error('Error in createBilling:', error);
+    res.status(500).json({ message: 'Error creating billing record', error: error.message });
   }
 };
 

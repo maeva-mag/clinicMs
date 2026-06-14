@@ -710,24 +710,64 @@ body {
 .register-form-container {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
-  border-radius: 18px;
-  padding: 30px;
-  box-shadow: var(--shadow-md);
-  animation: fadeIn 0.3s ease-out;
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.register-form-container h2 {
-  margin-top: 0;
-  margin-bottom: 24px;
-  font-size: 1.35rem;
+.register-form-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(90deg, var(--accent-green) 0%, var(--primary-blue) 100%);
+}
+
+.register-form-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--border-color-light);
+  padding-bottom: 20px;
+}
+
+.register-form-header .header-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent-green-bg);
+  color: var(--accent-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: inset 0 2px 4px rgba(16, 185, 129, 0.1);
+}
+
+.register-form-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.register-form-header .subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
 }
 
 .patient-register-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 24px;
 }
 
 @media (max-width: 768px) {
@@ -746,6 +786,60 @@ body {
   }
 }
 
+.form-section {
+  background: #f8fafc;
+  border: 1px solid #eef2f6;
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 12px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-section:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(50, 70, 100, 0.02);
+}
+
+.form-section.span-2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 768px) {
+  .form-section.span-2 {
+    grid-column: span 1;
+  }
+}
+
+.form-section .section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.form-section .section-icon {
+  color: var(--accent-green);
+  font-size: 16px;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .section-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .patient-register-form .form-group {
   display: flex;
   flex-direction: column;
@@ -753,22 +847,40 @@ body {
 }
 
 .patient-register-form label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-main);
+  color: #475569;
+  letter-spacing: 0.02em;
+  margin-left: 2px;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  width: 100%;
 }
 
 .patient-register-form input,
 .patient-register-form select,
 .patient-register-form textarea {
+  width: 100%;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 14px 16px;
   font-size: 0.95rem;
   color: var(--text-main);
   font-family: var(--font-family);
   background-color: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.2s;
+}
+
+.patient-register-form input:hover,
+.patient-register-form select:hover,
+.patient-register-form textarea:hover {
+  border-color: #94a3b8;
 }
 
 .patient-register-form input:focus,
@@ -776,56 +888,78 @@ body {
 .patient-register-form textarea:focus {
   outline: none;
   border-color: var(--accent-green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  background-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(33, 150, 83, 0.12);
 }
 
 .patient-register-form textarea {
-  min-height: 80px;
+  min-height: 100px;
   resize: vertical;
 }
 
 .form-buttons-row {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 16px;
   margin-top: 16px;
+  border-top: 1px solid var(--border-color-light);
+  padding-top: 24px;
 }
 
 .patient-register-form .submit-btn {
-  background-color: var(--accent-green);
+  background: linear-gradient(135deg, var(--accent-green) 0%, #10b981 100%);
   color: #fff;
   border: none;
-  border-radius: 10px;
-  padding: 12px 24px;
+  border-radius: 12px;
+  padding: 14px 28px;
   cursor: pointer;
   font-weight: 600;
   font-family: var(--font-family);
-  font-size: 0.92rem;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  font-size: 0.95rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .patient-register-form .submit-btn:hover {
-  background-color: #047857;
-  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.25);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+  filter: brightness(1.05);
+}
+
+.patient-register-form .submit-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
 }
 
 .patient-register-form .cancel-btn {
   background-color: #f1f5f9;
   color: #475569;
-  border: none;
-  border-radius: 10px;
-  padding: 12px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 28px;
   cursor: pointer;
   font-weight: 600;
   font-family: var(--font-family);
-  font-size: 0.92rem;
-  transition: all 0.2s;
+  font-size: 0.95rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .patient-register-form .cancel-btn:hover {
   background-color: #e2e8f0;
+  color: #1e293b;
+  transform: translateY(-1px);
+}
+
+.patient-register-form .cancel-btn:active {
+  transform: translateY(0);
 }
 
 /* Loading Spinner */
@@ -837,6 +971,200 @@ body {
   font-size: 1.1rem;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* Billing Tab Layout */
+.billing-tab-container {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 32px;
+  align-items: start;
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 1024px) {
+  .billing-tab-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.create-billing-card,
+.billing-history-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 0;
+}
+
+.create-billing-card h2,
+.billing-history-card h2 {
+  margin-top: 0;
+  margin-bottom: 24px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color-light);
+  padding-bottom: 14px;
+}
+
+.billing-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-section-divider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 10px;
+}
+
+.form-section-divider h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.add-item-row-btn {
+  background-color: var(--accent-green-bg);
+  color: var(--accent-green);
+  border: 1px solid rgba(33, 150, 83, 0.2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-family);
+}
+
+.add-item-row-btn:hover {
+  background-color: var(--accent-green);
+  color: white;
+}
+
+.billing-row-items {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background-color: #f8fafc;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.flex-3 {
+  flex: 3;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.billing-row-items input {
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  border-radius: 8px;
+}
+
+.delete-row-btn {
+  background-color: #fee2e2;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  height: 42px;
+  width: 42px;
+}
+
+.delete-row-btn:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+.billing-summary-block {
+  background-color: #f8fafc;
+  border: 1px solid #eef2f6;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+.summary-value {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.summary-value.charges {
+  color: var(--text-main);
+}
+
+.summary-value.payments {
+  color: var(--accent-green);
+}
+
+.balance-due {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.summary-value.balance.due {
+  color: var(--accent-red);
+}
+
+.summary-value.balance.paid {
+  color: var(--accent-green);
+}
+
+.invoice-download-btn {
+  background-color: #eff6ff;
+  color: var(--primary-blue);
+  border: 1px solid rgba(47, 109, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-family);
+}
+
+.invoice-download-btn:hover {
+  background-color: var(--primary-blue);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.history-list-wrapper {
+  max-height: 550px;
+  overflow-y: auto;
 }
 
 @keyframes fadeIn {

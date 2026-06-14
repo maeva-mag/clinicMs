@@ -21,6 +21,7 @@ const medicalHistorySchema = new mongoose.Schema({
   diagnosisDate: { type: Date },
   treatment: { type: String },
   medications: [medicationSchema],
+  notes: { type: String },
   prescribedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
 });
 
@@ -37,6 +38,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, required: true, enum: ['admin', 'client', 'doctor', 'nurse'], default: 'client' },
   userProfile: userProfileSchema, // or [userProfileSchema] if multiple
+  profilepicture: { type: String },
   medicalHistory: { type: [medicalHistorySchema], default: [] },
   appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' }],
   billing: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Billing' }],

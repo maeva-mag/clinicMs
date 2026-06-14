@@ -4,8 +4,8 @@ import { createShift, getShifts, getPersonalShifts, deleteShift } from '../contr
 
 const router = express.Router();
 
-// Get all shifts (general weekly timetable) - accessible by admin, doctor, and nurse
-router.get('/', authenticateToken, allowRoles(['admin', 'doctor', 'nurse']), getShifts);
+// Get all shifts (general weekly timetable) - accessible by admin, doctor, nurse, and client
+router.get('/', authenticateToken, allowRoles(['admin', 'doctor', 'nurse', 'client']), getShifts);
 
 // Get personal shifts - accessible by doctor and nurse
 router.get('/personal', authenticateToken, allowRoles(['doctor', 'nurse']), getPersonalShifts);

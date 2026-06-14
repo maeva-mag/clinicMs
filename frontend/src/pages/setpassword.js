@@ -23,7 +23,7 @@ import logo from '../assets/clinic-logo.jpg';
                 setError('Failed to set password. Please try again.');
             }
         } catch (err) {
-            setError('An error occurred while setting the password.');
+            setError(err.response?.data?.message || 'An error occurred while setting the password.');
         }
     }
     return(
