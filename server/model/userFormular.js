@@ -16,6 +16,8 @@ const nonUsersSchema = new mongoose.Schema({
   admittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Nurse' }, // who admitted the patient
   dischargedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Nurse' }, // who discharged the patient
   bed: { type: String, default: null },
-});
+  assignedDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', default: null },
+  assignedNurse:  { type: mongoose.Schema.Types.ObjectId, ref: 'Nurse',  default: null },
+}, { timestamps: true });
 
 export default mongoose.model('NonUser', nonUsersSchema);

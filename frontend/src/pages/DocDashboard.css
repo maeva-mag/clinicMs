@@ -1189,3 +1189,21 @@ body {
 }
 .prescription-success-icon { font-size: 48px; display: block; margin-bottom: 12px; }
 .prescription-success p { color: var(--text-muted); font-size: 14px; margin: 0; line-height: 1.6; }
+
+/* Patient type badges in Doc Dashboard */
+.patient-type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.patient-type-badge.registered {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+.patient-type-badge.onsite {
+  background-color: #fef3c7;
+  color: #92400e;
+}

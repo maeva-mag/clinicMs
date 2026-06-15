@@ -4,13 +4,14 @@ import { login, setStaffPassword, getClientDetails } from '../controllers/authen
 import {getMedicalHistory} from '../controllers/patient.js';
 import { updateMedicalHistory, writePrescription } from '../controllers/medicalHis.js';
 import { getAllPatients } from '../controllers/nurse.js';
-import { getDoctorPrescriptions, updateDoctorProfile, getDoctorProfile, getDoctorAppointments } from '../controllers/doctor.js';
+import { getDoctorPrescriptions, updateDoctorProfile, getDoctorProfile, getDoctorAppointments, getMyDoctorPatients } from '../controllers/doctor.js';
 
 
 const router = express.Router();
 router.post('/login', login);
 router.get('/getClientDetails', authenticateToken, getClientDetails);
 router.get('/patients', authenticateToken, allowRoles(['admin', 'nurse', 'doctor']), getAllPatients);
+router.get('/myPatients', authenticateToken, allowRoles(['doctor']), getMyDoctorPatients);
 router.get('/doctorProfile/:doctorId', authenticateToken, allowRoles(['admin', 'doctor']), getDoctorProfile);
 router.get('/doctorPrescriptions/:doctorId', authenticateToken, allowRoles(['admin', 'doctor']), getDoctorPrescriptions);
 router.get('/doctorAppointments/:doctorId', authenticateToken, allowRoles(['admin', 'doctor']), getDoctorAppointments);

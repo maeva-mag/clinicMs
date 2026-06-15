@@ -42,6 +42,8 @@ const NurseDashboard = () => {
     profilepicture: ''
   });
   const [personalShifts, setPersonalShifts] = useState([]);
+  const [myPatients, setMyPatients] = useState([]);
+  const [showOnlyMyPatients, setShowOnlyMyPatients] = useState(false);
 
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,10 +122,11 @@ const NurseDashboard = () => {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRes, patientsRes, shiftsRes] = await Promise.all([
+      const [profileRes, patientsRes, shiftsRes, myPatientsRes] = await Promise.all([
         API.get(`/nurses/nurseProfile/${nurseId}`),
         API.get('/nurses/patients'),
         API.get('/shifts/personal'),
+        API.get('/nurses/myPatients'),
       ]);
 
       const nurseProfile = profileRes.data.nurse;
@@ -138,6 +141,7 @@ const NurseDashboard = () => {
 
       setProfile(nurseProfile);
       setPatients(allPatients);
+      setMyPatients(myPatientsRes.data.patients || []);
       setPersonalShifts(shiftsRes.data.shifts || []);
       setStats({
         onsite: onsitePatients.length,
@@ -447,7 +451,25 @@ const NurseDashboard = () => {
   const renderPatients = () => (
     <div className="table-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-        <h2 style={{ margin: 0 }}>Patients List</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <h2 style={{ margin: 0 }}>Patients List</h2>
+          <div className="nurse-toggle-container">
+            <button 
+              className={`toggle-btn ${!showOnlyMyPatients ? 'active' : ''}`}
+              type="button"
+              onClick={() => setShowOnlyMyPatients(false)}
+            >
+              All Patients
+            </button>
+            <button 
+              className={`toggle-btn ${showOnlyMyPatients ? 'active' : ''}`}
+              type="button"
+              onClick={() => setShowOnlyMyPatients(true)}
+            >
+              My Patients ({myPatients.length})
+            </button>
+          </div>
+        </div>
         <div className="search-container" style={{ position: 'relative' }}>
           <div 
             onClick={() => setShowSearch(!showSearch)} 
@@ -493,8 +515,10 @@ const NurseDashboard = () => {
           )}
         </div>
       </div>
-      {patients.length === 0 ? (
-        <p className="no-data">No patients available.</p>
+      {(showOnlyMyPatients ? myPatients : patients).length === 0 ? (
+        <p className="no-data">
+          {showOnlyMyPatients ? "No patients assigned to you yet." : "No patients available."}
+        </p>
       ) : (
         <div className="data-table-wrapper">
           <table className="data-table">
@@ -504,17 +528,23 @@ const NurseDashboard = () => {
                 <th>Type</th>
                 <th>Admission Status</th>
                 <th>Bed Assigned</th>
+                <th>Assigned Doctor</th>
+                <th>Assigned Nurse</th>
                 <th>Contact</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {patients.map((patient) => {
+              {(showOnlyMyPatients ? myPatients : patients).map((patient) => {
                 const isOnsite = patient.patientType === 'Onsite';
                 const admitted = patient.admittedAt && !patient.dischargedAt;
                 const discharged = patient.dischargedAt;
                 const status = isOnsite ? (discharged ? 'Discharged' : admitted ? 'Admitted' : 'Awaiting Admission') : 'Registered';
                 
+                // Fallback logic for assigned nurse name
+                const docName = patient.assignedDoctor?.name ? `Dr. ${patient.assignedDoctor.name}` : (patient.assignedDoctor ? `Dr. ${patient.assignedDoctor}` : 'Unassigned');
+                const nurseName = patient.assignedNurse?.name || (patient.assignedNurse === nurseId ? (profile?.name || 'Me') : (patient.assignedNurse ? 'Assigned' : 'Unassigned'));
+
                 return (
                   <tr key={patient._id}>
                     <td>
@@ -540,6 +570,20 @@ const NurseDashboard = () => {
                         )
                       ) : (
                         <span className="text-muted">N/A</span>
+                      )}
+                    </td>
+                    <td>
+                      {patient.assignedDoctor ? (
+                        <span className="nurse-staff-badge nurse-doc-badge">{docName}</span>
+                      ) : (
+                        <span className="nurse-staff-badge nurse-unassigned-badge">Unassigned</span>
+                      )}
+                    </td>
+                    <td>
+                      {patient.assignedNurse ? (
+                        <span className="nurse-staff-badge nurse-nurse-badge">{nurseName}</span>
+                      ) : (
+                        <span className="nurse-staff-badge nurse-unassigned-badge">Unassigned</span>
                       )}
                     </td>
                     <td>{patient.telephone || patient.email || 'N/A'}</td>

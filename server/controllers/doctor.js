@@ -1,6 +1,7 @@
 import User from '../model/user.js';
 import Doctor from '../model/doctor.js';
 import Appointment from '../model/appointment.js';
+import NonUser from '../model/userFormular.js';
 
 
 export const getDoctorPrescriptions = async (req, res) => {
@@ -115,3 +116,26 @@ export const getDoctorAppointments = async (req, res) => {
   }
 };
 
+export const getMyDoctorPatients = async (req, res) => {
+  try {
+    const doctorId = req.user.userId;
+
+    const [registered, onsite] = await Promise.all([
+      User.find({ assignedDoctor: doctorId, role: 'client' })
+        .select('name email age gender bloodType telephone assignedNurse assignedDoctor createdAt')
+        .populate('assignedNurse', 'name ward'),
+      NonUser.find({ assignedDoctor: doctorId })
+        .select('name email age gender bloodType telephone assignedNurse assignedDoctor admittedAt bed')
+        .populate('assignedNurse', 'name ward'),
+    ]);
+
+    const patients = [
+      ...registered.map(p => ({ ...p._doc, patientType: 'Registered' })),
+      ...onsite.map(p => ({ ...p._doc, patientType: 'Onsite' })),
+    ];
+
+    res.status(200).json({ patients });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching assigned patients', error: error.message });
+  }
+};

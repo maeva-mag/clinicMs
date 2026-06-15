@@ -1,5 +1,5 @@
 import express from 'express';
-import { createAdminAccount, adminLogin, createStaffAccount, getAdminStats, getBillingRecords, getDoctorsAndNurses, getEpidemiologyStats, getAllPills, getAdminProfile, updateAdminProfile } from '../controllers/admin.js';
+import { createAdminAccount, adminLogin, createStaffAccount, getAdminStats, getBillingRecords, getDoctorsAndNurses, getEpidemiologyStats, getAllPills, getAdminProfile, updateAdminProfile, assignPatientToStaff, getAssignableStaff } from '../controllers/admin.js';
 import { authenticateToken, allowRoles } from '../middlewares/auth.js';
 import { getAllPatients } from '../controllers/nurse.js';
 import admin from '../model/admin.js';
@@ -19,4 +19,6 @@ router.get('/epidemiology', authenticateToken, allowRoles(['admin']), getEpidemi
 router.get('/pills', authenticateToken, allowRoles(['admin']), getAllPills);
 router.get('/profile', authenticateToken, allowRoles(['admin']), getAdminProfile);
 router.put('/profile', authenticateToken, allowRoles(['admin']), updateAdminProfile);
+router.put('/patients/:patientId/assign', authenticateToken, allowRoles(['admin']), assignPatientToStaff);
+router.get('/assignable-staff', authenticateToken, allowRoles(['admin']), getAssignableStaff);
 export default router;

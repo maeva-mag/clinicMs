@@ -3,7 +3,7 @@ import { authenticateToken, allowRoles } from '../middlewares/auth.js';
 import { login, setStaffPassword, getClientDetails } from '../controllers/authentication.js';
 import {getMedicalHistory} from '../controllers/patient.js';
 import { updateMedicalHistory } from '../controllers/medicalHis.js';
-import { updateNurseProfile, getNurseProfile, registerOnsitePatient, admitPatient,dischargePatient, createBilling,addCharge, addPayment, allocateBed, releaseBed, getAllPatients} from '../controllers/nurse.js';
+import { updateNurseProfile, getNurseProfile, registerOnsitePatient, admitPatient,dischargePatient, createBilling,addCharge, addPayment, allocateBed, releaseBed, getAllPatients, getMyNursePatients} from '../controllers/nurse.js';
 
 const router = express.Router();
 router.get('/getClientDetails', authenticateToken, getClientDetails);
@@ -14,6 +14,7 @@ router.get('/nurseProfile/:nurseId', authenticateToken, allowRoles(['admin', 'nu
 
 router.post('/patients/onsite', authenticateToken, allowRoles(['admin', 'nurse']), registerOnsitePatient);
 router.get('/patients', authenticateToken, allowRoles(['admin', 'nurse', 'doctor']), getAllPatients);
+router.get('/myPatients', authenticateToken, allowRoles(['nurse']), getMyNursePatients);
 router.put('/patients/:patientId/admit', authenticateToken, allowRoles(['admin', 'nurse']), admitPatient);
 router.put('/patients/:patientId/discharge', authenticateToken, allowRoles(['admin', 'nurse']), dischargePatient);
 

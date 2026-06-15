@@ -137,20 +137,26 @@ export const getAllPatients = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Only nurses, doctors, and admins can view all patients.' });
     }
 
-    const onsitePatients = await NonUser.find().populate('registeredBy', 'name role');
-    const registeredPatients = await User.find({ role: 'client' });
-    
+    const onsitePatients = await NonUser.find()
+      .populate('registeredBy', 'name role')
+      .populate('assignedDoctor', 'name department')
+      .populate('assignedNurse', 'name ward');
+
+    const registeredPatients = await User.find({ role: 'client' })
+      .populate('assignedDoctor', 'name department')
+      .populate('assignedNurse', 'name ward');
+
     // Combine both lists and ensure registeredOn is defined for all
     const allPatients = [
-      ...onsitePatients.map(p => ({ 
-        ...p._doc, 
-        patientType: 'Onsite', 
-        registeredOn: p.registeredOn || p._id.getTimestamp() 
+      ...onsitePatients.map(p => ({
+        ...p._doc,
+        patientType: 'Onsite',
+        registeredOn: p.registeredOn || p._id.getTimestamp()
       })),
-      ...registeredPatients.map(p => ({ 
-        ...p._doc, 
-        patientType: 'Registered', 
-        registeredOn: p._id.getTimestamp() 
+      ...registeredPatients.map(p => ({
+        ...p._doc,
+        patientType: 'Registered',
+        registeredOn: p._id.getTimestamp()
       }))
     ];
 
@@ -159,6 +165,31 @@ export const getAllPatients = async (req, res) => {
     res.status(500).json({ message: 'Error fetching patients', error: error.message });
   }
 };
+
+export const getMyNursePatients = async (req, res) => {
+  try {
+    const nurseId = req.user.userId;
+
+    const [registered, onsite] = await Promise.all([
+      User.find({ assignedNurse: nurseId, role: 'client' })
+        .select('name email age gender bloodType telephone assignedDoctor assignedNurse createdAt')
+        .populate('assignedDoctor', 'name department'),
+      NonUser.find({ assignedNurse: nurseId })
+        .select('name email age gender bloodType telephone assignedDoctor assignedNurse admittedAt bed dischargedAt')
+        .populate('assignedDoctor', 'name department'),
+    ]);
+
+    const patients = [
+      ...registered.map(p => ({ ...p._doc, patientType: 'Registered' })),
+      ...onsite.map(p => ({ ...p._doc, patientType: 'Onsite' })),
+    ];
+
+    res.status(200).json({ patients });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching assigned patients', error: error.message });
+  }
+};
+
 
 // Create a new billing record for a patient
 export const createBilling = async (req, res) => {

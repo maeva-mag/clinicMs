@@ -81,6 +81,11 @@ const AdminDashboard = () => {
   const [viewingStaffData, setViewingStaffData] = useState(null);
   const [viewingStaffLoading, setViewingStaffLoading] = useState(false);
 
+  // Patient assignment states
+  const [assignableStaff, setAssignableStaff] = useState({ doctors: [], nurses: [] });
+  const [assigningPatient, setAssigningPatient] = useState(null);
+  const [assignForm, setAssignForm] = useState({ doctorId: '', nurseId: '' });
+
   const handleSearchChange = (val) => {
     setSearchQuery(val);
     if (val.trim().length > 0) {
@@ -780,9 +785,51 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchAssignableStaff = async () => {
+    try {
+      const res = await API.get('/admin/assignable-staff');
+      setAssignableStaff(res.data);
+    } catch (err) {
+      console.error('Error fetching assignable staff:', err);
+    }
+  };
+
+  const handleOpenAssign = (patient) => {
+    setAssigningPatient(patient);
+    setAssignForm({
+      doctorId: patient.assignedDoctor?._id || patient.assignedDoctor || '',
+      nurseId: patient.assignedNurse?._id || patient.assignedNurse || ''
+    });
+  };
+
+  const handleSaveAssignment = async (e) => {
+    e.preventDefault();
+    if (!assigningPatient) return;
+    setLoading(true);
+    try {
+      await API.put(`/admin/patients/${assigningPatient._id}/assign`, {
+        assignedDoctor: assignForm.doctorId || null,
+        assignedNurse: assignForm.nurseId || null,
+        patientType: assigningPatient.patientType === 'Onsite' ? 'onsite' : 'registered'
+      });
+      setSuccess('Patient assignment updated successfully');
+      setAssigningPatient(null);
+      fetchPatients();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to assign patient');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'billing') fetchBilling();
-    if (activeTab === 'patients') fetchPatients();
+    if (activeTab === 'patients') {
+      fetchPatients();
+      fetchAssignableStaff();
+    }
     if (activeTab === 'staff') {
       fetchStaff();
       fetchShifts();
@@ -1843,7 +1890,10 @@ const AdminDashboard = () => {
                       <th>Name</th>
                       <th>Email</th>
                       <th>Type</th>
+                      <th>Assigned Doctor</th>
+                      <th>Assigned Nurse</th>
                       <th>Registered On</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1859,12 +1909,93 @@ const AdminDashboard = () => {
                         </td>
                         <td>{p.email}</td>
                         <td>{p.patientType}</td>
+                        <td>
+                          {p.assignedDoctor ? (
+                            <span className="staff-badge doctor-badge">
+                              Dr. {p.assignedDoctor.name || p.assignedDoctor}
+                            </span>
+                          ) : (
+                            <span className="staff-badge unassigned-badge">Unassigned</span>
+                          )}
+                        </td>
+                        <td>
+                          {p.assignedNurse ? (
+                            <span className="staff-badge nurse-badge">
+                              {p.assignedNurse.name || p.assignedNurse}
+                            </span>
+                          ) : (
+                            <span className="staff-badge unassigned-badge">Unassigned</span>
+                          )}
+                        </td>
                         <td>{p.registeredOn ? (new Date(p.registeredOn).toLocaleDateString() + ' ' + new Date(p.registeredOn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'N/A'}</td>
+                        <td>
+                          <button 
+                            onClick={() => handleOpenAssign(p)}
+                            style={{ padding: '6px 12px', background: '#1798ee', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', transition: 'background 0.2s' }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#117bce'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = '#1798ee'}
+                          >
+                            Assign
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : <p className="no-data">No patients found</p>}
+
+              {assigningPatient && (
+                <div className="assign-modal-overlay">
+                  <div className="assign-modal">
+                    <h3>Assign Staff to {assigningPatient.name}</h3>
+                    <p className="subtitle">Patient Type: {assigningPatient.patientType}</p>
+                    <form onSubmit={handleSaveAssignment}>
+                      <div className="form-group">
+                        <label>Assigned Doctor</label>
+                        <select 
+                          value={assignForm.doctorId}
+                          onChange={(e) => setAssignForm({ ...assignForm, doctorId: e.target.value })}
+                        >
+                          <option value="">-- Unassigned / Clear --</option>
+                          {assignableStaff.doctors && assignableStaff.doctors.map(doc => (
+                            <option key={doc._id} value={doc._id}>
+                              Dr. {doc.name} ({doc.department || 'General'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Assigned Nurse</label>
+                        <select 
+                          value={assignForm.nurseId}
+                          onChange={(e) => setAssignForm({ ...assignForm, nurseId: e.target.value })}
+                        >
+                          <option value="">-- Unassigned / Clear --</option>
+                          {assignableStaff.nurses && assignableStaff.nurses.map(nurse => (
+                            <option key={nurse._id} value={nurse._id}>
+                              {nurse.name} ({nurse.ward || 'General'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="modal-actions">
+                        <button type="submit" className="save-btn" disabled={loading}>
+                          {loading ? 'Saving...' : 'Save Assignment'}
+                        </button>
+                        <button 
+                          type="button" 
+                          className="cancel-btn" 
+                          onClick={() => setAssigningPatient(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
               {patients.length > 0 && (
                 <div style={{ marginTop: '15px' }}>
                   <button 

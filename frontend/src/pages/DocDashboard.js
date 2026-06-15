@@ -46,6 +46,7 @@ const DocDashboard = () => {
   const [showProfileTab, setShowProfileTab] = useState(false);
   const [personalShifts, setPersonalShifts] = useState([]);
   const [allPatients, setAllPatients] = useState([]);
+  const [myPatients, setMyPatients] = useState([]);
 
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,12 +153,13 @@ const DocDashboard = () => {
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes, allPatientsRes] = await Promise.all([
+      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes, allPatientsRes, myPatientsRes] = await Promise.all([
         API.get(`/doctors/doctorProfile/${doctorId}`),
         API.get(`/doctors/doctorPrescriptions/${doctorId}`),
         API.get(`/doctors/doctorAppointments/${doctorId}`),
         API.get(`/shifts/personal`),
         API.get('/doctors/patients'),
+        API.get('/doctors/myPatients'),
       ]);
 
       const doctorProfile = profileRes.data.doctor || null;
@@ -179,6 +181,7 @@ const DocDashboard = () => {
       setAppointments(appointmentsRes.data.appointments || []);
       setPersonalShifts(shiftsRes.data.shifts || []);
       setAllPatients(allPatientsRes.data.patients || []);
+      setMyPatients(myPatientsRes.data.patients || []);
 
       const historyRecords = [];
       patientList.forEach((patient) => {
@@ -484,8 +487,8 @@ const DocDashboard = () => {
           )}
         </div>
       </div>
-      {patients.length === 0 ? (
-        <p className="no-data">No patients assigned yet.</p>
+      {myPatients.length === 0 ? (
+        <p className="no-data">No patients assigned to you yet.</p>
       ) : (
         <div className="data-table-wrapper">
           <table className="data-table">
@@ -494,11 +497,14 @@ const DocDashboard = () => {
                 <th>Name</th>
                 <th>Age</th>
                 <th>Gender</th>
-                <th>Medical History Status</th>
+                <th>Type</th>
+                <th>Assigned Nurse</th>
+                <th>Bed / Room</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {patients.map((patient) => (
+              {myPatients.map((patient) => (
                 <tr key={patient._id}>
                   <td>
                     <span 
@@ -511,9 +517,27 @@ const DocDashboard = () => {
                   <td>{patient.age || 'N/A'}</td>
                   <td>{patient.gender || 'N/A'}</td>
                   <td>
-                    <span className="badge">
-                      {(patient.medicalHistory || []).length} medical records
+                    <span className={`patient-type-badge ${patient.patientType.toLowerCase()}`}>
+                      {patient.patientType}
                     </span>
+                  </td>
+                  <td>
+                    {patient.assignedNurse ? (
+                      patient.assignedNurse.name || patient.assignedNurse
+                    ) : (
+                      <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>
+                    )}
+                  </td>
+                  <td>{patient.bed || 'N/A'}</td>
+                  <td>
+                    <button 
+                      onClick={(e) => handlePatientClick(patient._id, patient.name, e)}
+                      style={{ padding: '6px 12px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
+                    >
+                      Options
+                    </button>
                   </td>
                 </tr>
               ))}

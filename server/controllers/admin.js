@@ -659,3 +659,57 @@ export const updateAdminProfile = async (req, res) => {
     res.status(500).json({ message: 'Error updating admin profile', error: error.message });
   }
 };
+
+// ── Patient Assignment ────────────────────────────────────────────────────────
+
+/**
+ * Assign a doctor and/or nurse to a registered patient (User model).
+ * Body: { assignedDoctor: <id|null>, assignedNurse: <id|null>, patientType: 'registered'|'onsite' }
+ */
+export const assignPatientToStaff = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can assign patients.' });
+    }
+    const { patientId } = req.params;
+    const { assignedDoctor, assignedNurse, patientType } = req.body;
+
+    const update = {};
+    if (assignedDoctor !== undefined) update.assignedDoctor = assignedDoctor || null;
+    if (assignedNurse  !== undefined) update.assignedNurse  = assignedNurse  || null;
+
+    let patient;
+    if (patientType === 'onsite') {
+      patient = await NonUser.findByIdAndUpdate(patientId, update, { new: true })
+        .populate('assignedDoctor', 'name department')
+        .populate('assignedNurse',  'name ward');
+    } else {
+      patient = await User.findByIdAndUpdate(patientId, update, { new: true })
+        .populate('assignedDoctor', 'name department')
+        .populate('assignedNurse',  'name ward');
+    }
+
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    res.status(200).json({ message: 'Patient assignment updated successfully', patient });
+  } catch (error) {
+    res.status(500).json({ message: 'Error assigning patient', error: error.message });
+  }
+};
+
+/**
+ * Return all doctors and nurses for use in assignment dropdowns.
+ */
+export const getAssignableStaff = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can access this.' });
+    }
+    const doctors = await Doctor.find({}).select('name department');
+    const nurses  = await Nurse.find({}).select('name ward');
+    res.status(200).json({ doctors, nurses });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching assignable staff', error: error.message });
+  }
+};
+

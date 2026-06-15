@@ -42,6 +42,8 @@ const userSchema = new mongoose.Schema({
   medicalHistory: { type: [medicalHistorySchema], default: [] },
   appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' }],
   billing: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Billing' }],
-});
+  assignedDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', default: null },
+  assignedNurse:  { type: mongoose.Schema.Types.ObjectId, ref: 'Nurse',  default: null },
+}, { timestamps: true });
 
 export default mongoose.model('User', userSchema);
