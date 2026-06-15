@@ -1,6 +1,8 @@
 import User from "../model/user.js";
 import Doctor from "../model/doctor.js";
 import Epidemiology from "../model/epidemiology.js";
+import NonUser from "../model/userFormular.js";
+import OnsitePrescription from "../model/onsitePrescription.js";
 
 // Helper to bucket age into a readable range
 const getAgeRange = (age) => {
@@ -16,8 +18,9 @@ const getAgeRange = (age) => {
   return '71+';
 };
 
-// Write a prescription (doctor only) — saves to patient medicalHistory + doctor prescriptions
-// Automatically records the diagnosis in the Epidemiology collection for statistics.
+// Write a prescription (doctor only)
+// - Registered patients: saved to User.medicalHistory (existing behaviour)
+// - Onsite patients:     saved to OnsitePrescription collection (doctor's own records)
 export const writePrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -27,74 +30,122 @@ export const writePrescription = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Only doctors can write prescriptions.' });
     }
 
-    const patient = await User.findById(patientId);
-    if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
+    if (!condition || !condition.trim()) {
+      return res.status(400).json({ message: 'Condition / Diagnosis is required.' });
     }
 
-    // Build the prescription / medical history entry
-    const prescriptionEntry = {
-      condition,
-      diagnosisDate: diagnosisDate || new Date(),
-      treatment,
-      medications: medications || [],
-      prescribedBy: req.user.userId,
-      notes,
-    };
+    // ── Try registered patient first ───────────────────────────────────────────
+    const registeredPatient = await User.findById(patientId);
 
-    patient.medicalHistory.push(prescriptionEntry);
-    await patient.save();
+    if (registeredPatient) {
+      // ── REGISTERED PATIENT: store on User.medicalHistory ──────────────────
+      const prescriptionEntry = {
+        condition,
+        diagnosisDate: diagnosisDate || new Date(),
+        treatment,
+        medications: medications || [],
+        prescribedBy: req.user.userId,
+        notes,
+      };
 
-    // Add patient to doctor's prescriptions list (avoid duplicates)
-    const doctor = await Doctor.findById(req.user.userId);
-    if (doctor) {
-      const alreadyAdded = doctor.prescriptions.some(
-        (id) => id.toString() === patient._id.toString()
-      );
-      if (!alreadyAdded) {
-        doctor.prescriptions.push(patient._id);
-        await doctor.save();
+      registeredPatient.medicalHistory.push(prescriptionEntry);
+      await registeredPatient.save();
+
+      // Add patient to doctor's prescriptions list (avoid duplicates)
+      const doctor = await Doctor.findById(req.user.userId);
+      if (doctor) {
+        const alreadyAdded = doctor.prescriptions.some(
+          (id) => id.toString() === registeredPatient._id.toString()
+        );
+        if (!alreadyAdded) {
+          doctor.prescriptions.push(registeredPatient._id);
+          await doctor.save();
+        }
       }
-    }
 
-    // ── Auto-record epidemiology data ──────────────────────────────────────────
-    if (condition && condition.trim()) {
-      try {
-        const now = diagnosisDate ? new Date(diagnosisDate) : new Date();
-        const patientAge = patient.age ? Number(patient.age) : null;
-        const patientGender = patient.gender || 'Unknown';
-
-        const epiRecord = new Epidemiology({
-          condition: condition.trim(),
-          gender: ['Male', 'Female', 'Other'].includes(patientGender) ? patientGender : 'Unknown',
-          age: patientAge,
-          ageRange: getAgeRange(patientAge),
-          month: now.getMonth() + 1,   // 1-12
-          year: now.getFullYear(),
-          patientId: patient._id,
-          doctorId: req.user.userId,
-          recordedAt: now
-        });
-        await epiRecord.save();
-      } catch (epiErr) {
-        // Non-fatal: log but do not fail the prescription request
-        console.warn('Epidemiology record failed to save:', epiErr.message);
+      // Auto-record epidemiology
+      if (condition && condition.trim()) {
+        try {
+          const now = diagnosisDate ? new Date(diagnosisDate) : new Date();
+          const epiRecord = new Epidemiology({
+            condition: condition.trim(),
+            gender: ['Male', 'Female', 'Other'].includes(registeredPatient.gender) ? registeredPatient.gender : 'Unknown',
+            age: registeredPatient.age ? Number(registeredPatient.age) : null,
+            ageRange: getAgeRange(registeredPatient.age),
+            month: now.getMonth() + 1,
+            year: now.getFullYear(),
+            patientId: registeredPatient._id,
+            doctorId: req.user.userId,
+            recordedAt: now
+          });
+          await epiRecord.save();
+        } catch (epiErr) {
+          console.warn('Epidemiology record failed to save:', epiErr.message);
+        }
       }
+
+      const updatedPatient = await User.findById(patientId).populate('medicalHistory.prescribedBy', 'name');
+      return res.status(200).json({
+        message: 'Prescription written successfully.',
+        patientType: 'registered',
+        medicalHistory: updatedPatient.medicalHistory,
+      });
     }
-    // ──────────────────────────────────────────────────────────────────────────
 
-    const updatedPatient = await User.findById(patientId).populate(
-      'medicalHistory.prescribedBy',
-      'name'
-    );
+    // ── Try onsite (walk-in) patient ───────────────────────────────────────────
+    const onsitePatient = await NonUser.findById(patientId);
 
-    res.status(200).json({
-      message: 'Prescription written successfully.',
-      medicalHistory: updatedPatient.medicalHistory,
-    });
+    if (onsitePatient) {
+      // ── ONSITE PATIENT: store in OnsitePrescription (doctor's own record) ──
+      const onsiteRx = new OnsitePrescription({
+        doctor:          req.user.userId,
+        onsitePatientId: onsitePatient._id,
+        patientName:     onsitePatient.name,
+        patientAge:      onsitePatient.age,
+        patientGender:   onsitePatient.gender,
+        patientEmail:    onsitePatient.email,
+        condition,
+        diagnosisDate:   diagnosisDate || new Date(),
+        treatment,
+        medications:     medications || [],
+        notes,
+      });
+      await onsiteRx.save();
+
+      // Auto-record epidemiology
+      if (condition && condition.trim()) {
+        try {
+          const now = diagnosisDate ? new Date(diagnosisDate) : new Date();
+          const epiRecord = new Epidemiology({
+            condition: condition.trim(),
+            gender: ['Male', 'Female', 'Other'].includes(onsitePatient.gender) ? onsitePatient.gender : 'Unknown',
+            age: onsitePatient.age ? Number(onsitePatient.age) : null,
+            ageRange: getAgeRange(onsitePatient.age),
+            month: now.getMonth() + 1,
+            year: now.getFullYear(),
+            patientId: onsitePatient._id,
+            doctorId: req.user.userId,
+            recordedAt: now
+          });
+          await epiRecord.save();
+        } catch (epiErr) {
+          console.warn('Epidemiology record failed to save:', epiErr.message);
+        }
+      }
+
+      return res.status(200).json({
+        message: 'Prescription written successfully for onsite patient.',
+        patientType: 'onsite',
+        prescription: onsiteRx,
+      });
+    }
+
+    // Patient not found in either collection
+    return res.status(404).json({ message: 'Patient not found. They may not be registered in the system.' });
+
   } catch (error) {
     console.error('writePrescription error:', error);
-    res.status(500).json({ message: 'Error writing prescription' });
+    res.status(500).json({ message: 'Error writing prescription', error: error.message });
   }
 };
 

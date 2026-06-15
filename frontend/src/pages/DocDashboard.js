@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import './DocDashboard.css';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { 
   FaUser, 
   FaRegCalendar, 
@@ -13,7 +15,9 @@ import {
   FaCheckCircle, 
   FaArrowLeft, 
   FaSyncAlt,
-  FaSearch
+  FaSearch,
+  FaDownload,
+  FaFileMedical
 } from 'react-icons/fa';
 
 const DocDashboard = () => {
@@ -47,6 +51,7 @@ const DocDashboard = () => {
   const [personalShifts, setPersonalShifts] = useState([]);
   const [allPatients, setAllPatients] = useState([]);
   const [myPatients, setMyPatients] = useState([]);
+  const [onsitePrescriptions, setOnsitePrescriptions] = useState([]);
 
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,9 +76,9 @@ const DocDashboard = () => {
   const [prescriptionSuccess, setPrescriptionSuccess] = useState('');
 
   // Open the action-choice menu when a patient name is clicked
-  const handlePatientClick = (patientId, patientName, e) => {
+  const handlePatientClick = (patientId, patientName, e, patientType = 'registered') => {
     e.stopPropagation();
-    setActionMenu({ patientId, patientName });
+    setActionMenu({ patientId, patientName, patientType });
   };
 
   // Load and show the patient profile view (no payments/appointments)
@@ -95,8 +100,9 @@ const DocDashboard = () => {
     }
   };
 
-  // Open the prescription writing modal
-  const handleOpenPrescription = (patientId, patientName) => {
+  // Open the prescription writing modal — also records patient type so the success
+  // message can inform the doctor where the prescription was stored.
+  const handleOpenPrescription = (patientId, patientName, patientType = 'registered') => {
     setActionMenu(null);
     setPrescriptionForm({
       condition: '',
@@ -106,7 +112,103 @@ const DocDashboard = () => {
       medications: [{ name: '', dosage: '', frequency: '' }],
     });
     setPrescriptionSuccess('');
-    setPrescriptionModal({ patientId, patientName });
+    setPrescriptionModal({ patientId, patientName, patientType });
+  };
+
+  // PDF download for a single onsite prescription
+  const downloadOnsitePrescriptionPDF = (rx) => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(30, 61, 122);
+    doc.rect(0, 0, doc.internal.pageSize.width, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('JHC Clinic — Prescription Record', 14, 18);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, doc.internal.pageSize.width - 14, 18, { align: 'right' });
+
+    // Patient info block
+    doc.setTextColor(30, 61, 122);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Patient Information', 14, 40);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 43, doc.internal.pageSize.width - 14, 43);
+
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const info = [
+      [`Patient Name:`, rx.patientName || 'N/A'],
+      [`Age:`, rx.patientAge != null ? String(rx.patientAge) : 'N/A'],
+      [`Gender:`, rx.patientGender || 'N/A'],
+      [`Email:`, rx.patientEmail || 'N/A'],
+      [`Patient Type:`, 'Onsite (Walk-in)'],
+    ];
+    let y = 50;
+    info.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 14, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, 65, y);
+      y += 7;
+    });
+
+    // Prescription details
+    y += 4;
+    doc.setTextColor(30, 61, 122);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Prescription Details', 14, y);
+    doc.line(14, y + 3, doc.internal.pageSize.width - 14, y + 3);
+    y += 10;
+
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(10);
+    const details = [
+      ['Condition / Diagnosis:', rx.condition],
+      ['Diagnosis Date:', rx.diagnosisDate ? new Date(rx.diagnosisDate).toLocaleDateString() : 'N/A'],
+      ['Treatment:', rx.treatment || 'N/A'],
+      ['Notes:', rx.notes || 'N/A'],
+    ];
+    details.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 14, y);
+      doc.setFont('helvetica', 'normal');
+      const lines = doc.splitTextToSize(value, 120);
+      doc.text(lines, 75, y);
+      y += 7 * lines.length;
+    });
+
+    // Medications table
+    if (rx.medications && rx.medications.length > 0) {
+      y += 4;
+      doc.setTextColor(30, 61, 122);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Medications', 14, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        head: [['Medication', 'Dosage', 'Frequency']],
+        body: rx.medications.map(m => [m.name || '', m.dosage || '', m.frequency || '']),
+        theme: 'striped',
+        headStyles: { fillColor: [30, 61, 122] },
+        styles: { fontSize: 9 },
+      });
+    }
+
+    // Footer
+    const pageH = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text('This prescription is stored in the doctor\'s records. Confidential — JHC Clinic.', 14, pageH - 10);
+
+    const dateStr = new Date(rx.diagnosisDate).toLocaleDateString().split('/').join('-');
+    doc.save(`Prescription_${rx.patientName}_${dateStr}.pdf`);
   };
 
   // Handle medication row changes
@@ -139,10 +241,20 @@ const DocDashboard = () => {
     setPrescriptionLoading(true);
     setError('');
     try {
-      await API.post(`/doctors/prescription/${prescriptionModal.patientId}`, prescriptionForm);
-      setPrescriptionSuccess('Prescription written successfully! It has been added to the patient\'s medical records.');
-      // Refresh dashboard data so the records tab updates
+      const res = await API.post(`/doctors/prescription/${prescriptionModal.patientId}`, prescriptionForm);
+      const isOnsite = res.data.patientType === 'onsite';
+      setPrescriptionSuccess(
+        isOnsite
+          ? 'Prescription saved! It is stored in your records (onsite patient). You can download it as a PDF from the "Onsite Prescriptions" tab.'
+          : 'Prescription written successfully! It has been added to the patient\'s medical records.'
+      );
+      // Refresh dashboard data
       fetchDashboard();
+      // Always refresh onsite prescriptions list
+      try {
+        const oxRes = await API.get('/doctors/onsitePrescriptions');
+        setOnsitePrescriptions(oxRes.data.prescriptions || []);
+      } catch (_) {}
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to write prescription');
     } finally {
@@ -153,13 +265,14 @@ const DocDashboard = () => {
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes, allPatientsRes, myPatientsRes] = await Promise.all([
+      const [profileRes, prescriptionsRes, appointmentsRes, shiftsRes, allPatientsRes, myPatientsRes, onsiteRxRes] = await Promise.all([
         API.get(`/doctors/doctorProfile/${doctorId}`),
         API.get(`/doctors/doctorPrescriptions/${doctorId}`),
         API.get(`/doctors/doctorAppointments/${doctorId}`),
         API.get(`/shifts/personal`),
         API.get('/doctors/patients'),
         API.get('/doctors/myPatients'),
+        API.get('/doctors/onsitePrescriptions'),
       ]);
 
       const doctorProfile = profileRes.data.doctor || null;
@@ -182,6 +295,7 @@ const DocDashboard = () => {
       setPersonalShifts(shiftsRes.data.shifts || []);
       setAllPatients(allPatientsRes.data.patients || []);
       setMyPatients(myPatientsRes.data.patients || []);
+      setOnsitePrescriptions(onsiteRxRes.data.prescriptions || []);
 
       const historyRecords = [];
       patientList.forEach((patient) => {
@@ -508,7 +622,7 @@ const DocDashboard = () => {
                 <tr key={patient._id}>
                   <td>
                     <span 
-                      onClick={(e) => handlePatientClick(patient._id, patient.name, e)} 
+                      onClick={(e) => handlePatientClick(patient._id, patient.name, e, patient.patientType === 'Onsite' ? 'onsite' : 'registered')} 
                       style={{ color: '#3498db', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
                     >
                       {patient.name || 'N/A'}
@@ -531,7 +645,7 @@ const DocDashboard = () => {
                   <td>{patient.bed || 'N/A'}</td>
                   <td>
                     <button 
-                      onClick={(e) => handlePatientClick(patient._id, patient.name, e)}
+                      onClick={(e) => handlePatientClick(patient._id, patient.name, e, patient.patientType === 'Onsite' ? 'onsite' : 'registered')}
                       style={{ padding: '6px 12px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', transition: 'background 0.2s' }}
                       onMouseEnter={(e) => e.target.style.backgroundColor = '#2980b9'}
                       onMouseLeave={(e) => e.target.style.backgroundColor = '#3498db'}
@@ -796,6 +910,14 @@ const DocDashboard = () => {
                 >
                   Shift Timetable
                 </button>
+                <button 
+                  className={`tab ${activeTab === 'onsiteRx' ? 'active' : ''}`} 
+                  type="button" 
+                  onClick={() => { setActiveTab('onsiteRx'); setShowProfileTab(false); }}
+                >
+                  <FaFileMedical style={{ marginRight: 6 }} />
+                  Onsite Prescriptions {onsitePrescriptions.length > 0 && <span className="badge-count">{onsitePrescriptions.length}</span>}
+                </button>
               </div>
 
               <div className="tab-content">
@@ -891,6 +1013,66 @@ const DocDashboard = () => {
                     ) : <p className="no-data">No shifts scheduled for this week.</p>}
                   </div>
                 )}
+                {activeTab === 'onsiteRx' && (
+                  <div className="table-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <div>
+                        <h2 style={{ margin: 0 }}>Onsite Patient Prescriptions</h2>
+                        <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>Prescriptions written for walk-in (onsite) patients — stored only in your records.</p>
+                      </div>
+                    </div>
+                    {onsitePrescriptions.length === 0 ? (
+                      <p className="no-data">No onsite prescriptions written yet.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        {onsitePrescriptions.map((rx) => (
+                          <div key={rx._id} style={{
+                            background: '#fff',
+                            borderRadius: 10,
+                            border: '1px solid #e2e8f0',
+                            padding: '16px 20px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: 12,
+                          }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+                                <span style={{ fontWeight: 700, color: '#1e3d7a', fontSize: 15 }}>{rx.patientName}</span>
+                                <span style={{ fontSize: 12, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 12, fontWeight: 500 }}>Onsite</span>
+                                <span style={{ fontSize: 12, color: '#94a3b8' }}>{rx.patientAge && `Age ${rx.patientAge}`} {rx.patientGender}</span>
+                              </div>
+                              <div style={{ fontSize: 13, color: '#334155', marginBottom: 4 }}>
+                                <strong>Condition:</strong> {rx.condition}
+                              </div>
+                              {rx.treatment && (
+                                <div style={{ fontSize: 13, color: '#334155', marginBottom: 4 }}>
+                                  <strong>Treatment:</strong> {rx.treatment}
+                                </div>
+                              )}
+                              {rx.medications && rx.medications.length > 0 && (
+                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                  <strong>Medications:</strong> {rx.medications.map(m => `${m.name} (${m.dosage}, ${m.frequency})`).join(' • ')}
+                                </div>
+                              )}
+                              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                                {new Date(rx.diagnosisDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </div>
+                            </div>
+                            <button
+                              className="submit-btn"
+                              style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13 }}
+                              onClick={() => downloadOnsitePrescriptionPDF(rx)}
+                            >
+                              <FaDownload /> Download PDF
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -925,12 +1107,12 @@ const DocDashboard = () => {
               </button>
               <button
                 className="action-btn action-btn-prescription"
-                onClick={() => handleOpenPrescription(actionMenu.patientId, actionMenu.patientName)}
+                onClick={() => handleOpenPrescription(actionMenu.patientId, actionMenu.patientName, actionMenu.patientType || 'registered')}
               >
                 <span className="action-btn-icon">✍️</span>
                 <div>
                   <strong>Write Prescription</strong>
-                  <p>Send to patient's medical records</p>
+                  <p>{actionMenu.patientType === 'onsite' ? "Saved to your onsite records (downloadable PDF)" : "Sent to patient's medical records"}</p>
                 </div>
               </button>
             </div>

@@ -2,6 +2,7 @@ import User from '../model/user.js';
 import Doctor from '../model/doctor.js';
 import Appointment from '../model/appointment.js';
 import NonUser from '../model/userFormular.js';
+import OnsitePrescription from '../model/onsitePrescription.js';
 
 
 export const getDoctorPrescriptions = async (req, res) => {
@@ -137,5 +138,20 @@ export const getMyDoctorPatients = async (req, res) => {
     res.status(200).json({ patients });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching assigned patients', error: error.message });
+  }
+};
+
+/**
+ * Return all OnsitePrescription records written by this doctor (for walk-in patients).
+ * These are stored on the doctor's side — not on the NonUser model.
+ */
+export const getOnsitePrescriptions = async (req, res) => {
+  try {
+    const doctorId = req.user.userId;
+    const prescriptions = await OnsitePrescription.find({ doctor: doctorId })
+      .sort({ createdAt: -1 });
+    res.status(200).json({ prescriptions });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching onsite prescriptions', error: error.message });
   }
 };
