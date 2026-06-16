@@ -67,6 +67,7 @@ const DocDashboard = () => {
   const [prescriptionModal, setPrescriptionModal] = useState(null); // { patientId, patientName }
   const [prescriptionForm, setPrescriptionForm] = useState({
     condition: '',
+    symptoms: '',
     diagnosisDate: new Date().toISOString().split('T')[0],
     treatment: '',
     notes: '',
@@ -106,6 +107,7 @@ const DocDashboard = () => {
     setActionMenu(null);
     setPrescriptionForm({
       condition: '',
+      symptoms: '',
       diagnosisDate: new Date().toISOString().split('T')[0],
       treatment: '',
       notes: '',
@@ -170,6 +172,7 @@ const DocDashboard = () => {
     doc.setFontSize(10);
     const details = [
       ['Condition / Diagnosis:', rx.condition],
+      ['Symptoms:', rx.symptoms || 'N/A'],
       ['Diagnosis Date:', rx.diagnosisDate ? new Date(rx.diagnosisDate).toLocaleDateString() : 'N/A'],
       ['Treatment:', rx.treatment || 'N/A'],
       ['Notes:', rx.notes || 'N/A'],
@@ -1132,6 +1135,7 @@ const DocDashboard = () => {
               <div className="modal-section">
                 <h3 className="modal-section-title">Personal Information</h3>
                 {[
+                  ['Patient Type', viewingProfile.profile?.patientType || 'Registered'],
                   ['Name', viewingProfile.profile?.name],
                   ['Email', viewingProfile.profile?.email],
                   ['Age', viewingProfile.profile?.age],
@@ -1141,6 +1145,12 @@ const DocDashboard = () => {
                   ['Address', viewingProfile.profile?.address],
                   ['Allergies', (viewingProfile.profile?.allergies || []).join(', ') || 'None'],
                   ['Emergency Contact', viewingProfile.profile?.emergencyContact],
+                  ...(viewingProfile.profile?.patientType === 'Onsite' ? [
+                    ['Bed / Room', viewingProfile.profile?.bed || 'None'],
+                    ['Admitted At', viewingProfile.profile?.admittedAt ? new Date(viewingProfile.profile.admittedAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'],
+                    ['Assigned Doctor', viewingProfile.profile?.assignedDoctor?.name || 'None'],
+                    ['Assigned Nurse', viewingProfile.profile?.assignedNurse?.name || 'None'],
+                  ] : [])
                 ].map(([label, val]) => (
                   <div key={label} className="modal-field">
                     <span className="modal-field-label">{label}</span>
@@ -1160,6 +1170,7 @@ const DocDashboard = () => {
                           <span className="med-badge">{entry.condition || 'Unknown condition'}</span>
                           <span className="med-date">{entry.diagnosisDate ? new Date(entry.diagnosisDate).toLocaleDateString() : 'N/A'}</span>
                         </div>
+                        {entry.symptoms && <p className="med-treatment"><strong>Symptoms:</strong> {entry.symptoms}</p>}
                         {entry.treatment && <p className="med-treatment"><strong>Treatment:</strong> {entry.treatment}</p>}
                         {entry.prescribedBy?.name && (
                           <p className="med-prescribed">Prescribed by: {entry.prescribedBy.name}</p>
@@ -1227,6 +1238,16 @@ const DocDashboard = () => {
                       onChange={(e) => setPrescriptionForm({ ...prescriptionForm, diagnosisDate: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="prx-field">
+                  <label>Symptoms</label>
+                  <textarea
+                    rows={2}
+                    value={prescriptionForm.symptoms}
+                    onChange={(e) => setPrescriptionForm({ ...prescriptionForm, symptoms: e.target.value })}
+                    placeholder="Describe patient symptoms..."
+                  />
                 </div>
 
                 <div className="prx-field">

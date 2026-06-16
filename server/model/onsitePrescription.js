@@ -18,6 +18,7 @@ const onsitePrescriptionSchema = new mongoose.Schema({
 
   // Prescription details
   condition:     { type: String, required: true },
+  symptoms:      { type: String },
   diagnosisDate: { type: Date, default: Date.now },
   treatment:     { type: String },
   medications:   { type: [medicationSchema], default: [] },

@@ -18,6 +18,7 @@ const medicationSchema = new mongoose.Schema({
 
 const medicalHistorySchema = new mongoose.Schema({
   condition: { type: String },
+  symptoms: { type: String },
   diagnosisDate: { type: Date },
   treatment: { type: String },
   medications: [medicationSchema],

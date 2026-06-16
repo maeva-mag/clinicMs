@@ -2,6 +2,8 @@ import User from "../model/user.js";
 import Appointment from "../model/appointment.js";
 import Payment from "../model/payment.js";
 import Billing from "../model/billing.js";
+import NonUser from "../model/userFormular.js";
+import OnsitePrescription from "../model/onsitePrescription.js";
 // Create or update profile
 export const createProfile = async (req, res) => {
   try {
@@ -28,16 +30,39 @@ export const createProfile = async (req, res) => {
 export const getUserProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findById(userId).select(
+    let user = await User.findById(userId).select(
       'name userProfile email age gender bloodType telephone allergies address emergencyContact medicalHistory'
     );
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      const nonUser = await NonUser.findById(userId)
+        .populate('assignedDoctor', 'name')
+        .populate('assignedNurse', 'name');
+      if (!nonUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      user = {
+        _id: nonUser._id,
+        name: nonUser.name,
+        email: nonUser.email,
+        age: nonUser.age,
+        gender: nonUser.gender,
+        bloodType: nonUser.bloodType,
+        telephone: nonUser.telephone,
+        allergies: nonUser.allergies,
+        address: nonUser.address,
+        emergencyContact: nonUser.emergencyContact,
+        bed: nonUser.bed,
+        admittedAt: nonUser.admittedAt,
+        assignedDoctor: nonUser.assignedDoctor,
+        assignedNurse: nonUser.assignedNurse,
+        patientType: 'Onsite'
+      };
     }
 
     res.status(200).json({ user });
   } catch (error) {
+    console.error('getUserProfile error:', error);
     res.status(500).json({ message: 'Error fetching user profile' });
   }
 };
@@ -65,14 +90,35 @@ export const updateUserProfile = async (req, res) => {
 };
  // get medical history
 export const getMedicalHistory = async (req, res) => {
-    try{
-        const { userId } = req.params;
-        const user = await User.findById(userId).select('medicalHistory');
-        res.status(200).json({ medicalHistory: user.medicalHistory });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching medical history' });
-
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).select('medicalHistory');
+    
+    if (!user) {
+      const nonUser = await NonUser.findById(userId);
+      if (!nonUser) {
+        return res.status(404).json({ message: 'Patient not found' });
+      }
+      const prescriptions = await OnsitePrescription.find({ onsitePatientId: userId })
+        .populate('doctor', 'name');
+      
+      const medicalHistory = prescriptions.map(rx => ({
+        condition: rx.condition,
+        symptoms: rx.symptoms,
+        diagnosisDate: rx.diagnosisDate,
+        treatment: rx.treatment,
+        notes: rx.notes,
+        medications: rx.medications,
+        prescribedBy: rx.doctor,
+      }));
+      return res.status(200).json({ medicalHistory });
     }
+    
+    res.status(200).json({ medicalHistory: user.medicalHistory });
+  } catch (error) {
+    console.error('getMedicalHistory error:', error);
+    res.status(500).json({ message: 'Error fetching medical history' });
+  }
 };
 // make an appointment
 export const makeAppointment = async (req, res) => {

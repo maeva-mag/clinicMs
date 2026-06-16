@@ -24,7 +24,7 @@ const getAgeRange = (age) => {
 export const writePrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { condition, diagnosisDate, treatment, medications, notes } = req.body;
+    const { condition, symptoms, diagnosisDate, treatment, medications, notes } = req.body;
 
     if (req.user.role !== 'doctor') {
       return res.status(403).json({ message: 'Access denied. Only doctors can write prescriptions.' });
@@ -34,6 +34,11 @@ export const writePrescription = async (req, res) => {
       return res.status(400).json({ message: 'Condition / Diagnosis is required.' });
     }
 
+    // Filter out medications with empty names
+    const cleanMedications = Array.isArray(medications)
+      ? medications.filter(m => m.name && m.name.trim() !== '')
+      : [];
+
     // ── Try registered patient first ───────────────────────────────────────────
     const registeredPatient = await User.findById(patientId);
 
@@ -41,15 +46,20 @@ export const writePrescription = async (req, res) => {
       // ── REGISTERED PATIENT: store on User.medicalHistory ──────────────────
       const prescriptionEntry = {
         condition,
+        symptoms,
         diagnosisDate: diagnosisDate || new Date(),
         treatment,
-        medications: medications || [],
+        medications: cleanMedications,
         prescribedBy: req.user.userId,
         notes,
       };
 
-      registeredPatient.medicalHistory.push(prescriptionEntry);
-      await registeredPatient.save();
+      // Atomic update to bypass other fields validation
+      const updatedPatient = await User.findByIdAndUpdate(
+        patientId,
+        { $push: { medicalHistory: prescriptionEntry } },
+        { new: true, runValidators: true }
+      ).populate('medicalHistory.prescribedBy', 'name');
 
       // Add patient to doctor's prescriptions list (avoid duplicates)
       const doctor = await Doctor.findById(req.user.userId);
@@ -84,7 +94,6 @@ export const writePrescription = async (req, res) => {
         }
       }
 
-      const updatedPatient = await User.findById(patientId).populate('medicalHistory.prescribedBy', 'name');
       return res.status(200).json({
         message: 'Prescription written successfully.',
         patientType: 'registered',
@@ -105,9 +114,10 @@ export const writePrescription = async (req, res) => {
         patientGender:   onsitePatient.gender,
         patientEmail:    onsitePatient.email,
         condition,
+        symptoms,
         diagnosisDate:   diagnosisDate || new Date(),
         treatment,
-        medications:     medications || [],
+        medications:     cleanMedications,
         notes,
       });
       await onsiteRx.save();
