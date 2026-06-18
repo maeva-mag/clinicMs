@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import './PatientDashboard.css';
-import { FaUser, FaCalendarAlt, FaUserMd, FaMobileAlt, FaCheckCircle, FaTimes } from 'react-icons/fa';
+import { FaUser, FaCalendarAlt, FaUserMd, FaMobileAlt, FaCheckCircle, FaTimes, FaLock } from 'react-icons/fa';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -39,6 +39,7 @@ const PatientDashboard = () => {
   const [selectedDoctor, setSelectedDoctor] = useState(null); // { doctorId, name, department }
   const [appointmentType, setAppointmentType] = useState(''); // 'Consultation' | 'Follow-up'
   const [paymentMethod, setPaymentMethod] = useState('');    // 'MTN Mobile Money' | 'Orange Mobile Money'
+  const [simulationStatus, setSimulationStatus] = useState(''); // '' | 'sending' | 'waiting' | 'verifying'
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState('');
@@ -191,23 +192,37 @@ const PatientDashboard = () => {
     e.preventDefault();
     if (!paymentMethod) { setBookingError('Please select a payment method.'); return; }
     setBookingLoading(true);
+    setBookingError('');
     try {
+      // 1. Simulate sending USSD payment request (1.5 seconds)
+      setSimulationStatus('sending');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // 2. Simulate waiting for pin entry (2.5 seconds)
+      setSimulationStatus('waiting');
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      // 3. Simulate verification/finalizing (1.5 seconds)
+      setSimulationStatus('verifying');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       const res = await API.post(`/patients/appointments/${userId}`, {
         doctorId: selectedDoctor.doctorId,
         date: bookingDate,
         time: bookingTime,
         reason: 'Consultation',
-        paymentMethod
+        paymentMethod: paymentMethod + ' (Simulated)'
       });
       setAppointments(prev => [...prev, res.data.appointment]);
       if (res.data.billing) setBills(prev => [...prev, res.data.billing]);
-      setSuccess('Consultation booked & payment of 1000 FCFA recorded successfully!');
+      setSuccess(`Consultation booked & simulated payment of 1,000 FCFA via ${paymentMethod} completed!`);
       resetBookingForm();
-      setTimeout(() => setSuccess(''), 4000);
+      setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
-      setBookingError(err.response?.data?.message || 'Payment failed. Please try again.');
+      setBookingError(err.response?.data?.message || 'Payment simulation failed. Please try again.');
     } finally {
       setBookingLoading(false);
+      setSimulationStatus('');
     }
   };
 
@@ -509,57 +524,104 @@ const PatientDashboard = () => {
 
                     {/* ── Step 2: Payment ── */}
                     {bookingStep === 'payment' && (
-                      <form onSubmit={handleMakePayment} className="payment-form">
-                        <div className="payment-summary">
-                          <div className="payment-summary-row">
-                            <span>Doctor</span>
-                            <strong>{selectedDoctor?.name}</strong>
-                          </div>
-                          <div className="payment-summary-row">
-                            <span>Date</span>
-                            <strong>{new Date(bookingDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
-                          </div>
-                          <div className="payment-summary-row">
-                            <span>Time</span>
-                            <strong>{bookingTime}</strong>
-                          </div>
-                          <div className="payment-summary-row total">
-                            <span>Amount Due</span>
-                            <strong className="amount">1 000 FCFA</strong>
-                          </div>
-                        </div>
-
-                        <h4><FaMobileAlt /> Select Payment Method</h4>
-                        <div className="payment-methods">
-                          <label className={`payment-method-card ${paymentMethod === 'MTN Mobile Money' ? 'selected' : ''}`}>
-                            <input type="radio" name="paymentMethod" value="MTN Mobile Money"
-                              checked={paymentMethod === 'MTN Mobile Money'}
-                              onChange={e => setPaymentMethod(e.target.value)} />
-                            <div className="method-logo mtn">MTN</div>
-                            <div>
-                              <strong>MTN Mobile Money</strong>
-                              <p>Pay via MTN MoMo</p>
+                      simulationStatus ? (
+                        <div className="payment-simulation-container">
+                          <div className="simulation-phone-card">
+                            <div className="phone-screen">
+                              <div className="status-indicator">
+                                <div className="pulse-indicator"></div>
+                                <span>SIMULATED PAYMENT PROMPT</span>
+                              </div>
+                              
+                              {simulationStatus === 'sending' && (
+                                <div className="sim-step">
+                                  <FaMobileAlt className="sim-icon pulse" />
+                                  <h3>Sending Prompt...</h3>
+                                  <p>Sending a simulated USSD push notification for <strong>1,000 FCFA</strong> to your phone via <strong>{paymentMethod}</strong>.</p>
+                                </div>
+                              )}
+                              
+                              {simulationStatus === 'waiting' && (
+                                <div className="sim-step">
+                                  <div className="keypad-icon-wrapper">
+                                    <FaLock className="sim-icon bounce" />
+                                  </div>
+                                  <h3>Waiting for PIN Entry</h3>
+                                  <p>A simulated USSD prompt has been sent. Please type your PIN on your phone to complete authorization.</p>
+                                  <div className="sim-mock-pin">
+                                    <div className="dots">
+                                      <span className="dot active"></span>
+                                      <span className="dot active"></span>
+                                      <span className="dot active"></span>
+                                      <span className="dot"></span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {simulationStatus === 'verifying' && (
+                                <div className="sim-step">
+                                  <FaCheckCircle className="sim-icon success-pulse" />
+                                  <h3>Verifying Payment</h3>
+                                  <p>PIN entry confirmed. Verifying simulated transaction records and finalizing appointment booking...</p>
+                                </div>
+                              )}
                             </div>
-                          </label>
-                          <label className={`payment-method-card ${paymentMethod === 'Orange Mobile Money' ? 'selected' : ''}`}>
-                            <input type="radio" name="paymentMethod" value="Orange Mobile Money"
-                              checked={paymentMethod === 'Orange Mobile Money'}
-                              onChange={e => setPaymentMethod(e.target.value)} />
-                            <div className="method-logo orange">Orange</div>
-                            <div>
-                              <strong>Orange Mobile Money</strong>
-                              <p>Pay via Orange Money</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleMakePayment} className="payment-form">
+                          <div className="payment-summary">
+                            <div className="payment-summary-row">
+                              <span>Doctor</span>
+                              <strong>{selectedDoctor?.name}</strong>
                             </div>
-                          </label>
-                        </div>
+                            <div className="payment-summary-row">
+                              <span>Date</span>
+                              <strong>{new Date(bookingDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+                            </div>
+                            <div className="payment-summary-row">
+                              <span>Time</span>
+                              <strong>{bookingTime}</strong>
+                            </div>
+                            <div className="payment-summary-row total">
+                              <span>Amount Due</span>
+                              <strong className="amount">1 000 FCFA</strong>
+                            </div>
+                          </div>
 
-                        <div className="payment-actions">
-                          <button type="button" className="cancel-btn" onClick={() => setBookingStep('form')}>← Back</button>
-                          <button type="submit" className="submit-btn pay-btn" disabled={bookingLoading || !paymentMethod}>
-                            {bookingLoading ? 'Processing payment…' : '💳 Make Payment & Book'}
-                          </button>
-                        </div>
-                      </form>
+                          <h4><FaMobileAlt /> Select Payment Method (Simulation)</h4>
+                          <div className="payment-methods">
+                            <label className={`payment-method-card ${paymentMethod === 'MTN Mobile Money' ? 'selected' : ''}`}>
+                              <input type="radio" name="paymentMethod" value="MTN Mobile Money"
+                                checked={paymentMethod === 'MTN Mobile Money'}
+                                onChange={e => setPaymentMethod(e.target.value)} />
+                              <div className="method-logo mtn">MTN</div>
+                              <div>
+                                <strong>MTN Mobile Money</strong>
+                                <p>Pay via MTN MoMo (Simulated)</p>
+                              </div>
+                            </label>
+                            <label className={`payment-method-card ${paymentMethod === 'Orange Mobile Money' ? 'selected' : ''}`}>
+                              <input type="radio" name="paymentMethod" value="Orange Mobile Money"
+                                checked={paymentMethod === 'Orange Mobile Money'}
+                                onChange={e => setPaymentMethod(e.target.value)} />
+                              <div className="method-logo orange">Orange</div>
+                              <div>
+                                <strong>Orange Mobile Money</strong>
+                                <p>Pay via Orange Money (Simulated)</p>
+                              </div>
+                            </label>
+                          </div>
+
+                          <div className="payment-actions">
+                            <button type="button" className="cancel-btn" onClick={() => setBookingStep('form')}>← Back</button>
+                            <button type="submit" className="submit-btn pay-btn" disabled={bookingLoading || !paymentMethod}>
+                              {bookingLoading ? 'Processing payment…' : '💳 Make Payment & Book'}
+                            </button>
+                          </div>
+                        </form>
+                      )
                     )}
                   </div>
                 )}

@@ -1036,3 +1036,159 @@
     text-align: center;
   }
 }
+
+/* PAYMENT SIMULATION MOCK PHONE UI */
+.payment-simulation-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px 0;
+  width: 100%;
+}
+
+.simulation-phone-card {
+  width: 100%;
+  max-width: 380px;
+  background: #1e293b;
+  border-radius: 36px;
+  padding: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 4px solid #475569;
+}
+
+.phone-screen {
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 24px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: inherit;
+  color: #1e293b;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-indicator {
+  position: absolute;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.5px;
+}
+
+.pulse-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  animation: redPulse 1.5s infinite;
+}
+
+@keyframes redPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.sim-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sim-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.sim-icon.pulse {
+  color: #3b82f6;
+  animation: bluePulse 1.5s infinite ease-in-out;
+}
+
+.sim-icon.bounce {
+  color: #eab308;
+  animation: iconBounce 1.5s infinite ease-in-out;
+}
+
+.sim-icon.success-pulse {
+  color: #22c55e;
+  animation: greenPulse 1.5s infinite;
+}
+
+@keyframes bluePulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes iconBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes greenPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.sim-step h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  color: #0f172a;
+}
+
+.sim-step p {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.sim-step strong {
+  color: #1e293b;
+}
+
+/* Mock PIN display */
+.sim-mock-pin {
+  margin-top: 16px;
+  background: #f8fafc;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.sim-mock-pin .dots {
+  display: flex;
+  gap: 12px;
+}
+
+.sim-mock-pin .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  transition: background-color 0.2s;
+}
+
+.sim-mock-pin .dot.active {
+  background-color: #475569;
+}

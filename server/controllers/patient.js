@@ -130,6 +130,12 @@ export const makeAppointment = async (req, res) => {
       return res.status(400).json({ message: 'Doctor ID, date, and time are required' });
     }
 
+    // Fetch the patient user to get their name for billing records
+    const patientUser = await User.findById(userId);
+    if (!patientUser) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+
     const newAppointment = new Appointment({
       doctor: doctorId,
       patient: userId,
@@ -142,6 +148,12 @@ export const makeAppointment = async (req, res) => {
     if (reason === 'Follow-up') {
       newAppointment.status = 'confirmed';
       await newAppointment.save();
+
+      // Push appointment reference to patient User
+      await User.findByIdAndUpdate(userId, {
+        $push: { appointments: newAppointment._id }
+      });
+
       return res.status(201).json({ message: 'Appointment created successfully', appointment: newAppointment });
     }
 
@@ -156,7 +168,9 @@ export const makeAppointment = async (req, res) => {
     await payment.save();
 
     const billing = new Billing({
+      patientName: patientUser.name,
       patient: userId,
+      patientModel: 'User',
       charges: [{
         description: "Consultation Fee",
         amount: 1000,
@@ -175,6 +189,11 @@ export const makeAppointment = async (req, res) => {
     newAppointment.payment = payment._id;
     newAppointment.status = 'confirmed';
     await newAppointment.save();
+
+    // Push appointment and billing references to patient User
+    await User.findByIdAndUpdate(userId, {
+      $push: { appointments: newAppointment._id, billing: billing._id }
+    });
 
     res.status(201).json({ message: 'Appointment created and payment recorded', appointment: newAppointment, billing });
   } catch (error) {
