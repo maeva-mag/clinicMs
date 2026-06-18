@@ -15,3 +15,11 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Global Logo Background Transparency */
+.auth-logo,
+.home-logo,
+.clinic-logo,
+img[src*="logo"] {
+  mix-blend-mode: multiply !important;
+}
