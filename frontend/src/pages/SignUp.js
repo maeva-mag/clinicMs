@@ -315,7 +315,7 @@ function SignUp() {
 
                     <button type="submit" className="signup-submit-btn">
                         <span>Register Profile</span>
-                        <FaArrowRight className="btn-arrow" />
+                        
                     </button>
                 </form>
 

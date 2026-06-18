@@ -110,7 +110,6 @@ function SetPassword() {
 
                     <button type="submit" className="login-submit-btn">
                         <span>Set Password</span>
-                        <FaArrowRight className="btn-arrow" />
                     </button>
                 </form>
 

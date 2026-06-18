@@ -269,13 +269,13 @@ span {
   font-weight: 600;
   padding: 10px 24px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(37, 99, 235, 0.15);
   transition: all 0.25s ease;
   margin: 16px auto 0 auto;
-  width: fit-content;
-  height: 30px;
+  width: 300px;
+  height: 40px;
   align-self: center;
 }
 
@@ -552,8 +552,8 @@ span {
   box-shadow: 0 4px 10px rgba(37, 99, 235, 0.15);
   transition: all 0.25s ease;
   margin: 16px auto 0 auto;
-  width: fit-content;
-  height: 30px;
+  width: 300px;
+  height: 40px;
   align-self: center;
 }
 
