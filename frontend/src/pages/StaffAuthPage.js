@@ -108,6 +108,7 @@ const StaffAuth = () => {
 
                     <button type="submit" className="login-submit-btn">
                         <span>Log In</span>
+                        <FaArrowRight className="btn-arrow" />
                     </button>
                 </form>
 
