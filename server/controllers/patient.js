@@ -136,6 +136,13 @@ export const makeAppointment = async (req, res) => {
       return res.status(404).json({ message: 'Patient not found' });
     }
 
+    // Fetch the doctor to get their name for enriching the response
+    const Doctor = (await import('../model/doctor.js')).default;
+    const doctorObj = await Doctor.findById(doctorId);
+    if (!doctorObj) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
     const newAppointment = new Appointment({
       doctor: doctorId,
       patient: userId,
@@ -154,7 +161,14 @@ export const makeAppointment = async (req, res) => {
         $push: { appointments: newAppointment._id }
       });
 
-      return res.status(201).json({ message: 'Appointment created successfully', appointment: newAppointment });
+      const appointmentObj = newAppointment.toObject();
+      appointmentObj.doctor = {
+        _id: doctorObj._id,
+        name: doctorObj.name,
+        department: doctorObj.department
+      };
+
+      return res.status(201).json({ message: 'Appointment created successfully', appointment: appointmentObj });
     }
 
     // For Consultation, process payment and confirm appointment
@@ -195,7 +209,14 @@ export const makeAppointment = async (req, res) => {
       $push: { appointments: newAppointment._id, billing: billing._id }
     });
 
-    res.status(201).json({ message: 'Appointment created and payment recorded', appointment: newAppointment, billing });
+    const appointmentObj = newAppointment.toObject();
+    appointmentObj.doctor = {
+      _id: doctorObj._id,
+      name: doctorObj.name,
+      department: doctorObj.department
+    };
+
+    res.status(201).json({ message: 'Appointment created and payment recorded', appointment: appointmentObj, billing });
   } catch (error) {
     console.error('makeAppointment error:', error);
     res.status(500).json({ message: 'Error creating appointment', error: error.message });

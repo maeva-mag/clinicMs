@@ -267,14 +267,15 @@ span {
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
-  padding: 14px 28px;
+  padding: 11px 32px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
   transition: all 0.25s ease;
-  margin-top: 10px;
-  width: 100%;
+  margin: 16px auto 0 auto;
+  width: fit-content;
+  align-self: center;
 }
 
 .signup-submit-btn:hover {
@@ -543,14 +544,15 @@ span {
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
-  padding: 14px 28px;
+  padding: 11px 32px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
   transition: all 0.25s ease;
-  margin-top: 10px;
-  width: 100%;
+  margin: 16px auto 0 auto;
+  width: fit-content;
+  align-self: center;
 }
 
 .login-submit-btn:hover {
